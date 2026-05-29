@@ -1,0 +1,14 @@
+package su.kidoz.axiomj.plugin;
+
+import org.gradle.api.model.ObjectFactory;
+import org.gradle.api.provider.Property;
+import javax.inject.Inject;
+
+public abstract class AxiomJExtension {
+    public abstract Property<Integer> getParallelism();
+
+    @Inject
+    public AxiomJExtension(ObjectFactory objects) {
+        getParallelism().convention(4);
+    }
+}

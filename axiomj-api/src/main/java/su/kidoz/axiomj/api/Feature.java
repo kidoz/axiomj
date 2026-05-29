@@ -1,0 +1,18 @@
+package su.kidoz.axiomj.api;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface Feature {
+    String id();
+
+    String name() default "";
+
+    String area() default "";
+
+    String owner() default "";
+}

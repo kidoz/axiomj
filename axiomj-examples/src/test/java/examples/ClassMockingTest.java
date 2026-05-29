@@ -1,0 +1,42 @@
+package examples;
+
+import static su.kidoz.axiomj.assertions.Expect.expect;
+
+import su.kidoz.axiomj.api.Fact;
+import su.kidoz.axiomj.api.Feature;
+import su.kidoz.axiomj.api.ProductArea;
+import su.kidoz.axiomj.api.Scenario;
+import su.kidoz.axiomj.mock.Arg;
+import su.kidoz.axiomj.mock.Mocks;
+import su.kidoz.axiomj.mock.bytecode.BytecodeMocks;
+
+@ProductArea("Testing")
+@Feature(id = "mock.bytecode", name = "Class mocking", owner = "core-team")
+public final class ClassMockingTest {
+
+    @Fact(name = "mock a concrete class")
+    @Scenario("a bytecode class mock reuses the core stubbing and verification engine")
+    void mockConcreteClass() {
+        var calc = BytecodeMocks.mockClass(Calculator.class);
+        Mocks.when(() -> calc.add(Arg.anyInt(), Arg.anyInt())).thenReturn(42);
+
+        expect(calc.add(1, 2)).isEqualTo(42);
+        expect(calc.add(5, 5)).isEqualTo(42);
+        Mocks.verify(() -> calc.add(Arg.anyInt(), Arg.anyInt())).calledTimes(2);
+        Mocks.verifyNoMoreInteractions(calc);
+    }
+
+    @Fact(name = "unstubbed class method returns default")
+    @Scenario("an unstubbed method on a class mock returns the type default, not the real result")
+    void unstubbedReturnsDefault() {
+        var calc = BytecodeMocks.mockClass(Calculator.class);
+
+        expect(calc.add(2, 2)).isEqualTo(0);
+    }
+
+    public static class Calculator {
+        public int add(int a, int b) {
+            return a + b;
+        }
+    }
+}
