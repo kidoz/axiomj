@@ -17,6 +17,8 @@ import su.kidoz.axiomj.api.LongRange;
 import su.kidoz.axiomj.api.StringLength;
 
 public final class BuiltInGenerators {
+    private static final Annotation[] NO_ANNOTATIONS = new Annotation[0];
+
     private BuiltInGenerators() {}
 
     public static Object generate(
@@ -71,16 +73,18 @@ public final class BuiltInGenerators {
                     elementType = (Class<?>) innerPt.getRawType();
                 }
             }
+            // Element generation must not inherit the parameter's own constraint annotations
+            // (e.g. @IntRange/@StringLength describe the collection parameter, not its elements).
             if (rawType == List.class) {
                 var list = new ArrayList<>();
                 for (int i = 0; i < size; i++) {
-                    list.add(generate(elementType, elementGenericType, annotations, context));
+                    list.add(generate(elementType, elementGenericType, NO_ANNOTATIONS, context));
                 }
                 return list;
             } else {
                 var set = new HashSet<>();
                 for (int i = 0; i < size; i++) {
-                    set.add(generate(elementType, elementGenericType, annotations, context));
+                    set.add(generate(elementType, elementGenericType, NO_ANNOTATIONS, context));
                 }
                 return set;
             }
@@ -101,15 +105,17 @@ public final class BuiltInGenerators {
             var map = new HashMap<>();
             for (int i = 0; i < size; i++) {
                 map.put(
-                        generate(keyType, keyGenericType, annotations, context),
-                        generate(valueType, valueGenericType, annotations, context));
+                        generate(keyType, keyGenericType, NO_ANNOTATIONS, context),
+                        generate(valueType, valueGenericType, NO_ANNOTATIONS, context));
             }
             return map;
         }
         if (rawType.isRecord()) {
             return generateRecord(rawType, context);
         }
-        throw new IllegalArgumentException("No built-in generator for " + rawType.getName());
+        throw new IllegalArgumentException("No built-in generator for " + rawType.getName()
+                + ". Supply a custom generator via @ForAll(gen = ...), or use a supported type:"
+                + " primitives/boxed, String, enums, records, or List/Set/Map of supported (parameterized) types.");
     }
 
     private static Object generateRecord(Class<?> rawType, GenerationContext context) {

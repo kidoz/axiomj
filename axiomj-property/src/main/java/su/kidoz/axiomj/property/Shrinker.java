@@ -21,7 +21,7 @@ public final class Shrinker {
             var out = new ArrayList<Object>();
             addDistinct(out, 0);
             addDistinct(out, v / 2);
-            addDistinct(out, v > 0 ? 1 : -1);
+            if (v != 0) addDistinct(out, v > 0 ? 1 : -1);
             return out;
         }
         if (type == long.class || type == Long.class) {
@@ -29,7 +29,15 @@ public final class Shrinker {
             var out = new ArrayList<Object>();
             addDistinct(out, 0L);
             addDistinct(out, v / 2L);
-            addDistinct(out, v > 0 ? 1L : -1L);
+            if (v != 0L) addDistinct(out, v > 0 ? 1L : -1L);
+            return out;
+        }
+        if (type == double.class || type == Double.class) {
+            double v = (Double) value;
+            var out = new ArrayList<Object>();
+            addDistinct(out, 0d);
+            if (Double.isFinite(v) && v != Math.rint(v)) addDistinct(out, Math.rint(v));
+            addDistinct(out, v / 2d);
             return out;
         }
         if (type == boolean.class || type == Boolean.class) {

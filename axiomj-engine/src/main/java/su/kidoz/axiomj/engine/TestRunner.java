@@ -47,10 +47,16 @@ public final class TestRunner {
     // the reported sample is, never correctness.
     private static final int MAX_SHRINK_TRIALS = 200;
 
-    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.locks.ReentrantLock>
-            RESOURCE_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+    // Cache of instantiated @ForAll(gen = ...) custom generators, keyed by generator class.
+    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, su.kidoz.axiomj.property.Arbitrary<?>>
+            ARBITRARY_GENERATORS = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final PrintStream out;
+
+    // Named resource locks coordinating @ResourceLock tests within this run; instance-scoped so the
+    // map's lifetime is bounded by the run rather than leaking for the life of the JVM.
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.locks.ReentrantLock>
+            resourceLocks = new java.util.concurrent.ConcurrentHashMap<>();
 
     // Per-class root container, set while a class runs (classes are processed sequentially in run()).
     private volatile SimpleContainer classRoot;
@@ -411,7 +417,7 @@ public final class TestRunner {
 
         java.util.concurrent.locks.ReentrantLock lock = null;
         if (lockAnnotation != null) {
-            lock = RESOURCE_LOCKS.computeIfAbsent(
+            lock = resourceLocks.computeIfAbsent(
                     lockAnnotation.value(), k -> new java.util.concurrent.locks.ReentrantLock());
         }
 
@@ -591,7 +597,7 @@ public final class TestRunner {
                 if (!hasAnnotation(annotations[i], ForAll.class)) {
                     continue;
                 }
-                for (Object candidate : Shrinker.candidates(types[i], genericTypes[i], annotations[i], current[i])) {
+                for (Object candidate : candidatesFor(types[i], genericTypes[i], annotations[i], current[i])) {
                     if (remainingTrials-- <= 0) {
                         break;
                     }
@@ -618,11 +624,53 @@ public final class TestRunner {
         var args = new Object[types.length];
         for (int i = 0; i < types.length; i++) {
             if (hasAnnotation(annotations[i], ForAll.class)) {
-                args[i] = BuiltInGenerators.generate(
-                        types[i], genericTypes[i], annotations[i], new GenerationContext(random, seed, attempt));
+                var context = new GenerationContext(random, seed, attempt);
+                var custom = customArbitrary(annotations[i]);
+                args[i] = custom != null
+                        ? custom.generate(context)
+                        : BuiltInGenerators.generate(types[i], genericTypes[i], annotations[i], context);
             }
         }
         return args;
+    }
+
+    // Candidate values to try while shrinking a failing @ForAll argument: a custom generator's own
+    // shrink() when one was supplied, otherwise the built-in type-based shrinker.
+    private static List<Object> candidatesFor(Class<?> type, Type genericType, Annotation[] annotations, Object value) {
+        var custom = customArbitrary(annotations);
+        if (custom != null) {
+            return new ArrayList<>(custom.shrink(value));
+        }
+        return Shrinker.candidates(type, genericType, annotations, value);
+    }
+
+    // Resolves the custom Arbitrary declared via @ForAll(gen = ...), or null when the built-ins apply.
+    @SuppressWarnings("unchecked")
+    private static su.kidoz.axiomj.property.Arbitrary<Object> customArbitrary(Annotation[] annotations) {
+        var forAll = findAnnotation(annotations, ForAll.class);
+        if (forAll == null || forAll.gen() == Object.class) {
+            return null;
+        }
+        var genClass = forAll.gen();
+        if (!su.kidoz.axiomj.property.Arbitrary.class.isAssignableFrom(genClass)) {
+            throw new IllegalStateException(
+                    "@ForAll(gen = " + genClass.getName() + ") must implement su.kidoz.axiomj.property.Arbitrary");
+        }
+        return (su.kidoz.axiomj.property.Arbitrary<Object>)
+                ARBITRARY_GENERATORS.computeIfAbsent(genClass, TestRunner::instantiateArbitrary);
+    }
+
+    private static su.kidoz.axiomj.property.Arbitrary<?> instantiateArbitrary(Class<?> genClass) {
+        try {
+            var constructor = genClass.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            return (su.kidoz.axiomj.property.Arbitrary<?>) constructor.newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(
+                    "Could not instantiate @ForAll generator " + genClass.getName()
+                            + " (it needs an accessible no-argument constructor)",
+                    e);
+        }
     }
 
     private Invocation newInvocation(
@@ -1063,8 +1111,6 @@ public final class TestRunner {
         if (property != null) addAll(dependencies, property.dependsOn());
         var dependsOn = method.getAnnotation(DependsOn.class);
         if (dependsOn != null) addAll(dependencies, dependsOn.value());
-        var dependsBy = method.getAnnotation(DependsBy.class);
-        if (dependsBy != null) addAll(dependencies, dependsBy.value());
         return dependencies.stream().distinct().toList();
     }
 

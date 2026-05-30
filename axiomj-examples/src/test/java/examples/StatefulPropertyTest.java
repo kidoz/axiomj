@@ -4,6 +4,7 @@ import static su.kidoz.axiomj.assertions.Expect.expect;
 
 import java.util.List;
 import su.kidoz.axiomj.api.Feature;
+import su.kidoz.axiomj.api.ForAll;
 import su.kidoz.axiomj.api.ProductArea;
 import su.kidoz.axiomj.api.Property;
 import su.kidoz.axiomj.property.Arbitrary;
@@ -65,20 +66,32 @@ public class StatefulPropertyTest {
         }
     };
 
-    // We can't automatically inject `List<Action>` via @ForAll yet because the
-    // engine doesn't know how to resolve Arbitrary bindings natively without explicit manual wiring.
-    // However, we can construct the Arbitrary manually to show how it's used.
+    /**
+     * A named {@link Arbitrary} so it can be referenced from {@code @ForAll(gen = ...)}; it just delegates to
+     * {@link StateMachine#sequence} for both generation and shrinking.
+     */
+    public static final class CounterActions implements Arbitrary<List<Action<CounterModel, BoundedCounter>>> {
+        private final Arbitrary<List<Action<CounterModel, BoundedCounter>>> delegate =
+                StateMachine.sequence(1, 20, INCREMENT, DECREMENT);
+
+        @Override
+        public List<Action<CounterModel, BoundedCounter>> generate(GenerationContext context) {
+            return delegate.generate(context);
+        }
+
+        @Override
+        public List<List<Action<CounterModel, BoundedCounter>>> shrink(List<Action<CounterModel, BoundedCounter>> v) {
+            return delegate.shrink(v);
+        }
+    }
+
+    // The action sequence is now generated and injected natively via @ForAll(gen = ...), and a failing sequence is
+    // shrunk through the custom Arbitrary's shrink(). A fresh model + SUT is built per attempt, so runs stay isolated.
     @Property(tries = 100)
-    void counterAdheresToModel() throws Throwable {
-        var seqGen = StateMachine.sequence(1, 20, INCREMENT, DECREMENT);
-
-        // This normally would be injected, but here we generate it manually for the test
-        var context = new GenerationContext(new java.util.SplittableRandom(), 0, 0);
-        List<Action<CounterModel, BoundedCounter>> actions = seqGen.generate(context);
-
+    void counterAdheresToModel(@ForAll(gen = CounterActions.class) List<Action<CounterModel, BoundedCounter>> actions)
+            throws Throwable {
         var model = new CounterModel();
         var sut = new BoundedCounter(5);
-
         new StateMachine<>(model, sut).run(actions);
     }
 }

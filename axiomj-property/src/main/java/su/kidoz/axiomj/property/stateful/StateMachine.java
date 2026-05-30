@@ -7,18 +7,26 @@ import su.kidoz.axiomj.property.GenerationContext;
 
 public final class StateMachine<M, S> {
 
-    private final M initialModel;
+    private final M model;
     private final S sut;
 
-    public StateMachine(M initialModel, S sut) {
-        this.initialModel = initialModel;
+    /**
+     * Creates a single-use state machine over a fresh model and system under test. The model is expected to be mutated
+     * in place by {@link Action#apply}. Construct a new instance (with fresh {@code model}/{@code sut}) for every
+     * generated sequence — reusing an instance would carry mutated state across runs and make results non-reproducible.
+     * When driven from a {@code @Property} via {@code @ForAll}, the engine already constructs fresh arguments per
+     * attempt, so building the model/SUT in the test body satisfies this.
+     */
+    public StateMachine(M model, S sut) {
+        this.model = model;
         this.sut = sut;
     }
 
+    /** Applies each action whose precondition holds against the (in-place mutated) model, asserting SUT parity. */
     public void run(List<Action<M, S>> actions) throws Throwable {
         for (Action<M, S> action : actions) {
-            if (action.precondition(initialModel)) {
-                action.apply(initialModel, sut);
+            if (action.precondition(model)) {
+                action.apply(model, sut);
             }
         }
     }
