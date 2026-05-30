@@ -45,6 +45,7 @@ import su.kidoz.axiomj.mock.Mocks;
 import su.kidoz.axiomj.property.Arbitrary;
 import su.kidoz.axiomj.property.BuiltInGenerators;
 import su.kidoz.axiomj.property.GenerationContext;
+import su.kidoz.axiomj.property.GeneratorRegistry;
 import su.kidoz.axiomj.property.Shrinker;
 
 public final class TestRunner {
@@ -700,7 +701,7 @@ public final class TestRunner {
         for (int i = 0; i < types.length; i++) {
             if (hasAnnotation(annotations[i], ForAll.class)) {
                 var context = new GenerationContext(random, seed, attempt);
-                var custom = customArbitrary(annotations[i]);
+                var custom = customArbitrary(types[i], genericTypes[i], annotations[i]);
                 args[i] = custom != null
                         ? custom.generate(context)
                         : BuiltInGenerators.generate(types[i], genericTypes[i], annotations[i], context);
@@ -711,27 +712,39 @@ public final class TestRunner {
 
     // Candidate values to try while shrinking a failing @ForAll argument: a custom generator's own
     // shrink() when one was supplied, otherwise the built-in type-based shrinker.
-    private static List<Object> candidatesFor(Class<?> type, Type genericType, Annotation[] annotations, Object value) {
-        var custom = customArbitrary(annotations);
+    private List<Object> candidatesFor(Class<?> type, Type genericType, Annotation[] annotations, Object value) {
+        var custom = customArbitrary(type, genericType, annotations);
         if (custom != null) {
             return new ArrayList<>(custom.shrink(value));
         }
         return Shrinker.candidates(type, genericType, annotations, value);
     }
 
-    // Resolves the custom Arbitrary declared via @ForAll(gen = ...), or null when the built-ins apply.
+    // Resolves the custom Arbitrary declared via @ForAll(gen = ...) or from a bound GeneratorRegistry, or null.
     @SuppressWarnings("unchecked")
-    private static Arbitrary<Object> customArbitrary(Annotation[] annotations) {
+    private Arbitrary<Object> customArbitrary(Class<?> type, Type genericType, Annotation[] annotations) {
         var forAll = findAnnotation(annotations, ForAll.class);
-        if (forAll == null || forAll.gen() == Object.class) {
+        if (forAll == null) {
             return null;
         }
-        var genClass = forAll.gen();
-        if (!Arbitrary.class.isAssignableFrom(genClass)) {
-            throw new IllegalStateException(
-                    "@ForAll(gen = " + genClass.getName() + ") must implement su.kidoz.axiomj.property.Arbitrary");
+        if (forAll.gen() != Object.class) {
+            var genClass = forAll.gen();
+            if (!Arbitrary.class.isAssignableFrom(genClass)) {
+                throw new IllegalStateException(
+                        "@ForAll(gen = " + genClass.getName() + ") must implement su.kidoz.axiomj.property.Arbitrary");
+            }
+            return (Arbitrary<Object>) ARBITRARY_GENERATORS.computeIfAbsent(genClass, TestRunner::instantiateArbitrary);
         }
-        return (Arbitrary<Object>) ARBITRARY_GENERATORS.computeIfAbsent(genClass, TestRunner::instantiateArbitrary);
+        if (classRoot != null) {
+            var registry = classRoot.getIfBound(GeneratorRegistry.class);
+            if (registry != null) {
+                var resolved = registry.get(type, genericType);
+                if (resolved != null) {
+                    return (Arbitrary<Object>) resolved;
+                }
+            }
+        }
+        return null;
     }
 
     private static Arbitrary<?> instantiateArbitrary(Class<?> genClass) {
