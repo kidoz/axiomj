@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.agent.builder.AgentBuilder;
+import net.bytebuddy.agent.builder.ResettableClassFileTransformer;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
 import su.kidoz.axiomj.mock.Mocks;
@@ -14,6 +15,7 @@ import su.kidoz.axiomj.mock.Mocks;
 public final class StaticMocks {
 
     public static final Map<Class<?>, InvocationHandler> STATIC_HANDLERS = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, ResettableClassFileTransformer> TRANSFORMERS = new ConcurrentHashMap<>();
     private static volatile Instrumentation instrumentation;
 
     private StaticMocks() {}
@@ -40,7 +42,7 @@ public final class StaticMocks {
         // guard such tests with @Execution(SEQUENTIAL) or @ResourceLock on the mocked class.
         Mocks.onSessionEnd(() -> unmockStatic(type));
 
-        new AgentBuilder.Default()
+        var transformer = new AgentBuilder.Default()
                 .disableClassFormatChanges()
                 .with(AgentBuilder.RedefinitionStrategy.REDEFINITION)
                 .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
@@ -49,12 +51,19 @@ public final class StaticMocks {
                         builder.visit(Advice.to(StaticMockAdvice.class)
                                 .on(ElementMatchers.isStatic().and(ElementMatchers.isMethod()))))
                 .installOn(instrumentation);
+
+        var previous = TRANSFORMERS.put(type, transformer);
+        if (previous != null) {
+            previous.reset(instrumentation, AgentBuilder.RedefinitionStrategy.REDEFINITION);
+        }
     }
 
     public static void unmockStatic(Class<?> type) {
         STATIC_HANDLERS.remove(type);
-        // Note: fully reverting the class transformation is complex in a quick prototype,
-        // so we simply remove the handler. The advice will gracefully fall back to the real method.
+        var transformer = TRANSFORMERS.remove(type);
+        if (transformer != null && instrumentation != null) {
+            transformer.reset(instrumentation, AgentBuilder.RedefinitionStrategy.REDEFINITION);
+        }
     }
 
     public static class StaticMockAdvice {
