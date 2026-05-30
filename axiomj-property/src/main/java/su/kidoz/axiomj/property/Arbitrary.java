@@ -3,6 +3,7 @@ package su.kidoz.axiomj.property;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public interface Arbitrary<T> {
@@ -10,6 +11,20 @@ public interface Arbitrary<T> {
 
     default List<T> shrink(T value) {
         return List.of();
+    }
+
+    static <T> Arbitrary<T> lazy(Supplier<Arbitrary<T>> supplier) {
+        return new Arbitrary<T>() {
+            @Override
+            public T generate(GenerationContext context) {
+                return supplier.get().generate(context);
+            }
+
+            @Override
+            public List<T> shrink(T value) {
+                return supplier.get().shrink(value);
+            }
+        };
     }
 
     default <U> Arbitrary<U> map(Function<T, U> mapper) {
