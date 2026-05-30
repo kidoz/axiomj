@@ -23,6 +23,10 @@ public class AxiomJPlugin implements Plugin<Project> {
             });
 
             var buildDir = project.getLayout().getBuildDirectory();
+            // Default to scanning the test classpath so a freshly-applied plugin discovers tests instead of
+            // running nothing. The engine fails (non-zero exit) if this selects no tests, so `axiomjTest`
+            // can never report a green build while executing zero tests.
+            task.getTestClasses().convention(java.util.List.of("--scan-classpath"));
             task.getParallelism().convention(axiomjExt.getParallelism());
             task.getFailFast().convention(axiomjExt.getFailFast());
             task.getSeed().convention(axiomjExt.getSeed());

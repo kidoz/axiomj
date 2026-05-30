@@ -11,9 +11,19 @@ public final class Main {
             classesToRun.addAll(ClasspathScanner.scan(config));
         }
 
-        if (config.help() || classesToRun.isEmpty()) {
+        if (config.help()) {
             printUsage();
             return;
+        }
+
+        // Selecting no tests is a configuration error, not a success: exiting 0 here would let a
+        // misconfigured runner/plugin report a green build while executing nothing.
+        if (classesToRun.isEmpty()) {
+            System.err.println(
+                    "AxiomJ: no tests were selected. "
+                            + "Pass one or more test classes, or use --scan-classpath (optionally with --include-package=...).");
+            printUsage();
+            System.exit(2);
         }
 
         var effectiveConfig = config.withClassNames(classesToRun);
