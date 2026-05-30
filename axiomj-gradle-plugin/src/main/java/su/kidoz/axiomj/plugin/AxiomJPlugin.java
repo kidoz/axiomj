@@ -5,6 +5,8 @@ import org.gradle.api.Project;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.SourceSet;
 
+import java.util.List;
+
 public class AxiomJPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
@@ -26,7 +28,7 @@ public class AxiomJPlugin implements Plugin<Project> {
             // Default to scanning the test classpath so a freshly-applied plugin discovers tests instead of
             // running nothing. The engine fails (non-zero exit) if this selects no tests, so `axiomjTest`
             // can never report a green build while executing zero tests.
-            task.getTestClasses().convention(java.util.List.of("--scan-classpath"));
+            task.getTestClasses().convention(List.of("--scan-classpath"));
             task.getParallelism().convention(axiomjExt.getParallelism());
             task.getFailFast().convention(axiomjExt.getFailFast());
             task.getSeed().convention(axiomjExt.getSeed());

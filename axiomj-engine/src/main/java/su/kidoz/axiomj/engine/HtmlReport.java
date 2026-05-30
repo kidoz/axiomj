@@ -1,5 +1,7 @@
 package su.kidoz.axiomj.engine;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.List;
 
 public final class HtmlReport {
@@ -137,8 +139,8 @@ public final class HtmlReport {
     }
 
     private static String errorToString(Throwable t) {
-        var sw = new java.io.StringWriter();
-        t.printStackTrace(new java.io.PrintWriter(sw));
+        var sw = new StringWriter();
+        t.printStackTrace(new PrintWriter(sw));
         return sw.toString();
     }
 }

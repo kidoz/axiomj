@@ -12,6 +12,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,22 +22,27 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SplittableRandom;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.ReentrantLock;
 import su.kidoz.axiomj.api.*;
 import su.kidoz.axiomj.di.Config;
 import su.kidoz.axiomj.di.SimpleContainer;
 import su.kidoz.axiomj.di.TestModule;
 import su.kidoz.axiomj.mock.Mocks;
+import su.kidoz.axiomj.property.Arbitrary;
 import su.kidoz.axiomj.property.BuiltInGenerators;
 import su.kidoz.axiomj.property.GenerationContext;
 import su.kidoz.axiomj.property.Shrinker;
@@ -53,15 +59,13 @@ public final class TestRunner {
     private static final long ABORT_DRAIN_MILLIS = 500;
 
     // Cache of instantiated @ForAll(gen = ...) custom generators, keyed by generator class.
-    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, su.kidoz.axiomj.property.Arbitrary<?>>
-            ARBITRARY_GENERATORS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, Arbitrary<?>> ARBITRARY_GENERATORS = new ConcurrentHashMap<>();
 
     private final PrintStream out;
 
     // Named resource locks coordinating @ResourceLock tests within this run; instance-scoped so the
     // map's lifetime is bounded by the run rather than leaking for the life of the JVM.
-    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.locks.ReentrantLock>
-            resourceLocks = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ReentrantLock> resourceLocks = new ConcurrentHashMap<>();
 
     // Per-class root container, set while a class runs (classes are processed sequentially in run()).
     private volatile SimpleContainer classRoot;
@@ -392,7 +396,7 @@ public final class TestRunner {
 
     // Cancels every future, then waits a bounded time for them to settle, so in-flight tests stop
     // touching shared state before the class container is closed. Best-effort.
-    private static void cancelAndDrain(java.util.Collection<Future<TestResult>> futures) {
+    private static void cancelAndDrain(Collection<Future<TestResult>> futures) {
         for (var future : futures) {
             future.cancel(true);
         }
@@ -422,7 +426,7 @@ public final class TestRunner {
         // it runs sequentially or concurrently and independent of the order futures are consumed.
         long startedMillis = now();
         long startedNanos = System.nanoTime();
-        var future = new java.util.concurrent.CompletableFuture<TestResult>();
+        var future = new CompletableFuture<TestResult>();
         var worker = Thread.ofVirtual().name("axiomj-timeout-", 0).start(() -> {
             try {
                 future.complete(executeMethod(testClass, plan, method, runSeed, corpus));
@@ -468,10 +472,9 @@ public final class TestRunner {
             lockAnnotation = testClass.getAnnotation(ResourceLock.class);
         }
 
-        java.util.concurrent.locks.ReentrantLock lock = null;
+        ReentrantLock lock = null;
         if (lockAnnotation != null) {
-            lock = resourceLocks.computeIfAbsent(
-                    lockAnnotation.value(), k -> new java.util.concurrent.locks.ReentrantLock());
+            lock = resourceLocks.computeIfAbsent(lockAnnotation.value(), k -> new ReentrantLock());
         }
 
         TestResult lastResult = null;
@@ -718,25 +721,24 @@ public final class TestRunner {
 
     // Resolves the custom Arbitrary declared via @ForAll(gen = ...), or null when the built-ins apply.
     @SuppressWarnings("unchecked")
-    private static su.kidoz.axiomj.property.Arbitrary<Object> customArbitrary(Annotation[] annotations) {
+    private static Arbitrary<Object> customArbitrary(Annotation[] annotations) {
         var forAll = findAnnotation(annotations, ForAll.class);
         if (forAll == null || forAll.gen() == Object.class) {
             return null;
         }
         var genClass = forAll.gen();
-        if (!su.kidoz.axiomj.property.Arbitrary.class.isAssignableFrom(genClass)) {
+        if (!Arbitrary.class.isAssignableFrom(genClass)) {
             throw new IllegalStateException(
                     "@ForAll(gen = " + genClass.getName() + ") must implement su.kidoz.axiomj.property.Arbitrary");
         }
-        return (su.kidoz.axiomj.property.Arbitrary<Object>)
-                ARBITRARY_GENERATORS.computeIfAbsent(genClass, TestRunner::instantiateArbitrary);
+        return (Arbitrary<Object>) ARBITRARY_GENERATORS.computeIfAbsent(genClass, TestRunner::instantiateArbitrary);
     }
 
-    private static su.kidoz.axiomj.property.Arbitrary<?> instantiateArbitrary(Class<?> genClass) {
+    private static Arbitrary<?> instantiateArbitrary(Class<?> genClass) {
         try {
             var constructor = genClass.getDeclaredConstructor();
             constructor.setAccessible(true);
-            return (su.kidoz.axiomj.property.Arbitrary<?>) constructor.newInstance();
+            return (Arbitrary<?>) constructor.newInstance();
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(
                     "Could not instantiate @ForAll generator " + genClass.getName()
@@ -749,7 +751,7 @@ public final class TestRunner {
             Class<?> testClass, Method method, long seed, int attempt, boolean property, DefaultTestLogger logger)
             throws ReflectiveOperationException {
         var container = classRoot.child();
-        container.bindInstance(su.kidoz.axiomj.api.TestLogger.class, logger);
+        container.bindInstance(TestLogger.class, logger);
         var context = new TestContext(
                 testClass.getName() + "#" + method.getName(), displayName(method), seed, attempt, property);
         var instance = constructTest(testClass, container, context);
@@ -760,9 +762,9 @@ public final class TestRunner {
     private SimpleContainer rootContainerFor(Class<?> testClass, List<String> activeProfiles)
             throws ReflectiveOperationException {
         var root = new SimpleContainer();
-        var testClock = new su.kidoz.axiomj.api.TestClock();
-        root.bindInstance(java.time.Clock.class, testClock);
-        root.bindInstance(su.kidoz.axiomj.api.TestClock.class, testClock);
+        var testClock = new TestClock();
+        root.bindInstance(Clock.class, testClock);
+        root.bindInstance(TestClock.class, testClock);
 
         var modules = testClass.getAnnotation(UseModules.class);
         if (modules != null) {
@@ -1347,8 +1349,8 @@ public final class TestRunner {
         if (candidate == null || filter == null || filter.isBlank()) {
             return false;
         }
-        var normalizedCandidate = candidate.toLowerCase(java.util.Locale.ROOT);
-        var normalizedFilter = filter.toLowerCase(java.util.Locale.ROOT);
+        var normalizedCandidate = candidate.toLowerCase(Locale.ROOT);
+        var normalizedFilter = filter.toLowerCase(Locale.ROOT);
         if (normalizedFilter.endsWith("*")) {
             return normalizedCandidate.startsWith(normalizedFilter.substring(0, normalizedFilter.length() - 1));
         }
@@ -1432,7 +1434,7 @@ public final class TestRunner {
         for (var root : SOURCE_ROOTS) {
             for (var extension : new String[] {".java", ".kt"}) {
                 var candidate = root + "/" + relative + extension;
-                if (java.nio.file.Files.isRegularFile(java.nio.file.Path.of(candidate))) {
+                if (Files.isRegularFile(Path.of(candidate))) {
                     return candidate;
                 }
             }
@@ -1493,14 +1495,14 @@ public final class TestRunner {
             }
             all.sort(Comparator.comparingInt(TestRunner::order).thenComparing(Method::getName));
             for (Method method : all) {
-                if (method.isAnnotationPresent(su.kidoz.axiomj.api.BeforeSuite.class)) beforeSuite.add(method);
+                if (method.isAnnotationPresent(BeforeSuite.class)) beforeSuite.add(method);
                 if (method.isAnnotationPresent(BeforeAll.class)) beforeAll.add(method);
                 if (method.isAnnotationPresent(BeforeEach.class)) beforeEach.add(method);
                 if (method.isAnnotationPresent(Fact.class) || method.isAnnotationPresent(Property.class))
                     tests.add(method);
                 if (method.isAnnotationPresent(AfterEach.class)) afterEach.add(method);
                 if (method.isAnnotationPresent(AfterAll.class)) afterAll.add(method);
-                if (method.isAnnotationPresent(su.kidoz.axiomj.api.AfterSuite.class)) afterSuite.add(method);
+                if (method.isAnnotationPresent(AfterSuite.class)) afterSuite.add(method);
             }
             return new TestPlan(
                     List.copyOf(beforeSuite),

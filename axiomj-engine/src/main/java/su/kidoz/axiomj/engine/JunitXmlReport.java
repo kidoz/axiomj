@@ -1,6 +1,9 @@
 package su.kidoz.axiomj.engine;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public final class JunitXmlReport {
 
@@ -13,7 +16,7 @@ public final class JunitXmlReport {
                 "<testsuites name=\"AxiomJ\" time=\"%.3f\" tests=\"%d\" failures=\"%d\" skipped=\"%d\">\n",
                 summary.durationMillis() / 1000.0, summary.total(), summary.failed(), summary.skipped()));
 
-        var testsByClass = results.stream().collect(java.util.stream.Collectors.groupingBy(TestResult::className));
+        var testsByClass = results.stream().collect(Collectors.groupingBy(TestResult::className));
 
         for (var entry : testsByClass.entrySet()) {
             var className = entry.getKey();
@@ -99,8 +102,8 @@ public final class JunitXmlReport {
     }
 
     private static String stackTrace(Throwable t) {
-        var sw = new java.io.StringWriter();
-        t.printStackTrace(new java.io.PrintWriter(sw));
+        var sw = new StringWriter();
+        t.printStackTrace(new PrintWriter(sw));
         return sw.toString();
     }
 }

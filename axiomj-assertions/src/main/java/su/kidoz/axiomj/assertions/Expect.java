@@ -5,10 +5,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
@@ -86,7 +88,7 @@ public final class Expect {
      */
     public static void completesWithin(Duration budget, ThrowingRunnable action) {
         var soft = SOFT.isBound() ? SOFT.get() : null;
-        var thrown = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var thrown = new AtomicReference<Throwable>();
         Runnable body = () -> {
             try {
                 action.run();
@@ -498,9 +500,7 @@ public final class Expect {
         }
 
         public StringSubject containsIgnoringCase(String expected) {
-            if (actual == null
-                    || !actual.toLowerCase(java.util.Locale.ROOT)
-                            .contains(expected.toLowerCase(java.util.Locale.ROOT))) {
+            if (actual == null || !actual.toLowerCase(Locale.ROOT).contains(expected.toLowerCase(Locale.ROOT))) {
                 report("Expected <%s> to contain (ignoring case) <%s>".formatted(actual, expected));
             }
             return self();

@@ -65,7 +65,9 @@ just fmt-check  # verify formatting
 ### Facts and assertions
 
 ```java
+import java.util.List;
 import su.kidoz.axiomj.api.Fact;
+import su.kidoz.axiomj.assertions.Expect;
 import static su.kidoz.axiomj.assertions.Expect.expect;
 
 final class CalculatorTest {
@@ -77,7 +79,7 @@ final class CalculatorTest {
 
     @Fact
     void collectionsAndSoftAssertions() {
-        var users = java.util.List.of("ada", "bob");
+        var users = List.of("ada", "bob");
         expect(users).hasSize(2).contains("ada").doesNotContain("zoe");
 
         Expect.softly(() -> {            // all failures reported together
@@ -123,6 +125,7 @@ void parsesAnyEmail(@ForAll(gen = Emails.class) String email) {
 ### Dependency injection and mocking
 
 ```java
+import java.util.Optional;
 import su.kidoz.axiomj.api.*;
 import su.kidoz.axiomj.mock.Arg;
 import su.kidoz.axiomj.mock.Mocks;
@@ -136,7 +139,7 @@ final class GreetingServiceTest {
 
     @Fact
     void greetsKnownUser() {
-        Mocks.when(() -> repository.find("42")).thenReturn(java.util.Optional.of("Ada"));
+        Mocks.when(() -> repository.find("42")).thenReturn(Optional.of("Ada"));
 
         expect(service.greet("42")).isEqualTo("Hello, Ada");
         Mocks.verify(() -> repository.find(Arg.any())).calledOnce();

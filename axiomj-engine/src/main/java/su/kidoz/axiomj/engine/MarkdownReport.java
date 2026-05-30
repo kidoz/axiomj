@@ -1,5 +1,7 @@
 package su.kidoz.axiomj.engine;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -250,8 +252,8 @@ final class MarkdownReport {
     }
 
     private static String stackTraceHead(Throwable error, int maxLines) {
-        var trace = new java.io.StringWriter();
-        error.printStackTrace(new java.io.PrintWriter(trace));
+        var trace = new StringWriter();
+        error.printStackTrace(new PrintWriter(trace));
         var lines = trace.toString().split("\\R");
         var out = new StringBuilder();
         for (int i = 0; i < Math.min(maxLines, lines.length); i++)

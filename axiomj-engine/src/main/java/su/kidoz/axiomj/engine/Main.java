@@ -1,12 +1,14 @@
 package su.kidoz.axiomj.engine;
 
+import java.util.ArrayList;
+
 public final class Main {
     private Main() {}
 
     public static void main(String[] args) throws Exception {
         var config = RunConfig.parse(args);
 
-        java.util.List<String> classesToRun = new java.util.ArrayList<>(config.classNames());
+        var classesToRun = new ArrayList<String>(config.classNames());
         if (config.scanClasspath()) {
             classesToRun.addAll(ClasspathScanner.scan(config));
         }

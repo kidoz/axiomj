@@ -2,6 +2,7 @@ package su.kidoz.axiomj.engine;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.jar.JarFile;
@@ -102,7 +103,7 @@ public final class ClasspathScanner {
         try {
             var clazz = Class.forName(className, false, ClasspathScanner.class.getClassLoader());
             // Ignore abstract classes or interfaces for test discovery
-            if (clazz.isInterface() || java.lang.reflect.Modifier.isAbstract(clazz.getModifiers())) {
+            if (clazz.isInterface() || Modifier.isAbstract(clazz.getModifiers())) {
                 return;
             }
 

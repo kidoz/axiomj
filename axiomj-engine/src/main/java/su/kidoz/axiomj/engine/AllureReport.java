@@ -1,5 +1,6 @@
 package su.kidoz.axiomj.engine;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +13,7 @@ import java.util.UUID;
 final class AllureReport {
     private AllureReport() {}
 
-    static void write(Path resultsDir, List<TestResult> results) throws java.io.IOException {
+    static void write(Path resultsDir, List<TestResult> results) throws IOException {
         Files.createDirectories(resultsDir);
         clean(resultsDir);
         for (var result : results) {
@@ -39,7 +40,7 @@ final class AllureReport {
 
     // The result UUID embeds startMillis, so every run emits new filenames. Remove the Allure
     // artifacts from previous runs first so results do not accumulate across invocations.
-    private static void clean(Path resultsDir) throws java.io.IOException {
+    private static void clean(Path resultsDir) throws IOException {
         try (var entries = Files.newDirectoryStream(resultsDir)) {
             for (var entry : entries) {
                 var name = entry.getFileName().toString();

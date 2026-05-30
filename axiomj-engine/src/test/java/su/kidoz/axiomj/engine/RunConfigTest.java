@@ -3,6 +3,7 @@ package su.kidoz.axiomj.engine;
 import static su.kidoz.axiomj.assertions.Expect.expect;
 
 import java.nio.file.Path;
+import java.util.List;
 import su.kidoz.axiomj.api.Fact;
 
 class RunConfigTest {
@@ -99,7 +100,7 @@ class RunConfigTest {
     @Fact
     void withClassNamesReplacesOnlyClasses() {
         var config = RunConfig.parse(new String[] {"--seed=7", "--parallelism=3", "examples.Original"});
-        var updated = config.withClassNames(java.util.List.of("examples.A", "examples.B"));
+        var updated = config.withClassNames(List.of("examples.A", "examples.B"));
         expect(updated.classNames().size()).isEqualTo(2);
         expect(updated.classNames().get(0)).isEqualTo("examples.A");
         expect(updated.seed()).isEqualTo(7L);

@@ -1,5 +1,7 @@
 package su.kidoz.axiomj.di;
 
+import java.lang.reflect.RecordComponent;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -49,9 +51,7 @@ public final class Config {
         }
         try {
             var components = recordType.getRecordComponents();
-            var types = java.util.Arrays.stream(components)
-                    .map(java.lang.reflect.RecordComponent::getType)
-                    .toArray(Class<?>[]::new);
+            var types = Arrays.stream(components).map(RecordComponent::getType).toArray(Class<?>[]::new);
             var args = new Object[components.length];
             for (int i = 0; i < components.length; i++) {
                 var propKey = keyPrefix + "." + components[i].getName();

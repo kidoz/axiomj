@@ -6,9 +6,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import su.kidoz.axiomj.api.Inject;
@@ -217,8 +219,8 @@ public final class SimpleContainer implements Binder {
 
     // Tracks the chain of types currently being constructed on this thread so a dependency cycle
     // (A needs B needs A) fails fast with the offending path instead of overflowing the stack.
-    private static final ThreadLocal<java.util.LinkedHashSet<Class<?>>> CONSTRUCTING =
-            ThreadLocal.withInitial(java.util.LinkedHashSet::new);
+    private static final ThreadLocal<LinkedHashSet<Class<?>>> CONSTRUCTING =
+            ThreadLocal.withInitial(LinkedHashSet::new);
 
     public <T> T construct(Class<T> type) {
         var inProgress = CONSTRUCTING.get();
@@ -266,7 +268,7 @@ public final class SimpleContainer implements Binder {
                 Object closeable = closeables.get(i);
                 if (closeable instanceof AutoCloseable) {
                     ((AutoCloseable) closeable).close();
-                } else if (closeable instanceof java.util.concurrent.Future<?> f) {
+                } else if (closeable instanceof Future<?> f) {
                     // if a binding itself returns a future (like an async start), cancel it or wait.
                     // But typically the object itself has a method.
                     f.cancel(true);

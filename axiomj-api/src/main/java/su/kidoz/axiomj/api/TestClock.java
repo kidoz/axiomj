@@ -1,15 +1,15 @@
 package su.kidoz.axiomj.api;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 
 /**
- * A deterministic test clock that can be injected into tests. This extends {@code java.time.Clock} to allow seamless
- * injection where application code expects a standard clock, while providing {@code advance()} methods for test
- * control.
+ * A deterministic test clock that can be injected into tests. This extends {@link Clock} to allow seamless injection
+ * where application code expects a standard clock, while providing {@code advance()} methods for test control.
  */
-public class TestClock extends java.time.Clock {
+public class TestClock extends Clock {
 
     private Instant current;
     private final ZoneId zone;
@@ -29,7 +29,7 @@ public class TestClock extends java.time.Clock {
     }
 
     @Override
-    public java.time.Clock withZone(ZoneId zone) {
+    public Clock withZone(ZoneId zone) {
         return new TestClock(current, zone);
     }
 
