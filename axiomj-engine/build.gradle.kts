@@ -20,6 +20,8 @@ val runEngineTests =
             "su.kidoz.axiomj.engine.ShrinkerTest",
             "su.kidoz.axiomj.engine.JunitXmlReportTest",
             "su.kidoz.axiomj.engine.LifecycleSafetyTest",
+            "su.kidoz.axiomj.engine.FailureCorpusTest",
+            "su.kidoz.axiomj.engine.MarkdownReportTest",
         )
     }
 
