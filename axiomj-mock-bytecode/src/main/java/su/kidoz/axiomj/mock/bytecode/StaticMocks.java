@@ -34,6 +34,11 @@ public final class StaticMocks {
 
         InvocationHandler handler = Mocks.newControllerHandler(type, strict);
         STATIC_HANDLERS.put(type, handler);
+        // Scope the static mock to the current test: when the test session ends (pass or fail) the handler is
+        // removed automatically, so a failing test cannot leave a static mock active for later tests. Handlers
+        // live in a process-wide map, so concurrently mocking the *same* class from parallel tests still races —
+        // guard such tests with @Execution(SEQUENTIAL) or @ResourceLock on the mocked class.
+        Mocks.onSessionEnd(() -> unmockStatic(type));
 
         new AgentBuilder.Default()
                 .disableClassFormatChanges()

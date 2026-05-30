@@ -28,6 +28,7 @@ public final class Mocks {
 
     private static final ScopedValue<CaptureMode> CAPTURE_MODE = ScopedValue.newInstance();
     private static final ScopedValue<List<MockController>> SESSION = ScopedValue.newInstance();
+    private static final ScopedValue<List<Runnable>> SESSION_TEARDOWN = ScopedValue.newInstance();
     private static final AtomicLong SEQUENCE = new AtomicLong();
     private static final Map<Object, MockController> NON_PROXY_MOCKS = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -98,7 +99,34 @@ public final class Mocks {
      * {@link #verifyStrictStubs()} can report unmatched strict stubs. Used by the engine to wrap each test invocation.
      */
     public static <T> T inSession(Supplier<T> body) {
-        return ScopedValue.where(SESSION, new ArrayList<MockController>()).call(body::get);
+        var teardown = new ArrayList<Runnable>();
+        return ScopedValue.where(SESSION, new ArrayList<MockController>())
+                .where(SESSION_TEARDOWN, teardown)
+                .call(() -> {
+                    try {
+                        return body.get();
+                    } finally {
+                        // Run session-scoped cleanup (e.g. removing static-mock handlers) on success or
+                        // failure, most-recent first, so nothing leaks into the next test.
+                        for (int i = teardown.size() - 1; i >= 0; i--) {
+                            try {
+                                teardown.get(i).run();
+                            } catch (Throwable ignored) {
+                                // best-effort session cleanup
+                            }
+                        }
+                    }
+                });
+    }
+
+    /**
+     * Registers a cleanup action to run when the current test session ends (whether it passes or fails). Used by the
+     * bytecode module to undo static mocking automatically; a no-op when called outside a session.
+     */
+    public static void onSessionEnd(Runnable cleanup) {
+        if (SESSION_TEARDOWN.isBound()) {
+            SESSION_TEARDOWN.get().add(cleanup);
+        }
     }
 
     /** Fails if any strict mock created in the current session has a stub that was never matched. */
