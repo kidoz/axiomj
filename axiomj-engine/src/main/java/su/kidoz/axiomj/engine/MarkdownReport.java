@@ -67,7 +67,7 @@ final class MarkdownReport {
         var byFeature = new LinkedHashMap<String, List<TestResult>>();
         for (var result : sorted(results)) {
             byFeature
-                    .computeIfAbsent(featurePath(result), ignored -> new ArrayList<>())
+                    .computeIfAbsent(featurePath(result), _ -> new ArrayList<>())
                     .add(result);
         }
         md.append("## Feature groups\n\n");

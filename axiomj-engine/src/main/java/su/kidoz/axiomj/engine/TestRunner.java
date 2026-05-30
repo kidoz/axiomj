@@ -60,18 +60,23 @@ public final class TestRunner {
         var started = Instant.now();
         var results = new ArrayList<TestResult>();
         var threadFactory = Thread.ofVirtual().name("axiomj-test-", 0).factory();
+        var corpus = new FailureCorpus();
         try (ExecutorService executor = Executors.newFixedThreadPool(config.parallelism(), threadFactory)) {
             for (String className : config.classNames()) {
+                if (config.failFast() && results.stream().anyMatch(TestResult::failed)) {
+                    break;
+                }
                 try {
                     Class<?> testClass = Class.forName(className);
                     var plan = TestPlan.of(testClass);
-                    var root = rootContainerFor(testClass);
+                    var root = rootContainerFor(testClass, config.activeProfiles());
                     classRoot = root;
                     boolean beforeAllDone = false;
                     try {
                         invokeAllStatic(plan.beforeAll());
                         beforeAllDone = true;
-                        results.addAll(runClass(config, executor, testClass, plan));
+                        var classResults = runClass(config, executor, testClass, plan, corpus);
+                        results.addAll(classResults);
                     } finally {
                         try {
                             if (beforeAllDone) {
@@ -89,6 +94,7 @@ public final class TestRunner {
                 }
             }
         }
+        corpus.save();
 
         long duration = Duration.between(started, Instant.now()).toMillis();
         int failed = (int) results.stream().filter(TestResult::failed).count();
@@ -111,7 +117,8 @@ public final class TestRunner {
         return summary;
     }
 
-    private List<TestResult> runClass(RunConfig config, ExecutorService executor, Class<?> testClass, TestPlan plan) {
+    private List<TestResult> runClass(
+            RunConfig config, ExecutorService executor, Class<?> testClass, TestPlan plan, FailureCorpus corpus) {
         var output = new ArrayList<TestResult>();
         var nodes = new LinkedHashMap<String, TestNode>();
         var duplicateNames = new LinkedHashSet<String>();
@@ -238,50 +245,76 @@ public final class TestRunner {
                             || layer.stream()
                                     .anyMatch(node -> (executionMode(node.method()) == ExecutionMode.SAME_THREAD
                                             || executionMode(node.method()) == ExecutionMode.SEQUENTIAL))
-                    ? runSequential(config, testClass, plan, layer)
-                    : runConcurrent(config, executor, testClass, plan, layer);
+                    ? runSequential(config, testClass, plan, layer, corpus)
+                    : runConcurrent(config, executor, testClass, plan, layer, corpus);
             for (var result : layerResults) {
                 output.add(result);
                 done.put(result.methodName(), result);
                 remaining.remove(result.methodName());
                 print(result);
+                if (config.failFast() && result.failed()) {
+                    return output;
+                }
             }
             changed = true;
         }
         return output;
     }
 
-    private List<TestResult> runSequential(RunConfig config, Class<?> testClass, TestPlan plan, List<TestNode> nodes) {
+    private List<TestResult> runSequential(
+            RunConfig config, Class<?> testClass, TestPlan plan, List<TestNode> nodes, FailureCorpus corpus) {
         var results = new ArrayList<TestResult>();
         for (var node : nodes) {
-            results.add(runMethod(testClass, plan, node.method(), config.seed()));
-        }
-        return results;
-    }
-
-    private List<TestResult> runConcurrent(
-            RunConfig config, ExecutorService executor, Class<?> testClass, TestPlan plan, List<TestNode> nodes) {
-        var results = new ArrayList<TestResult>();
-        var futures = new LinkedHashMap<TestNode, Future<TestResult>>();
-        for (var node : nodes) {
-            futures.put(node, executor.submit(() -> runMethod(testClass, plan, node.method(), config.seed())));
-        }
-        for (var entry : futures.entrySet()) {
-            var node = entry.getKey();
-            var future = entry.getValue();
-            try {
-                results.add(future.get());
-            } catch (Throwable error) {
-                results.add(failedResult(testClass, node.method(), now(), 0, unwrap(error), Map.of()));
+            var result = runMethod(testClass, plan, node.method(), config.seed(), corpus);
+            results.add(result);
+            if (config.failFast() && result.failed()) {
+                break;
             }
         }
         return results;
     }
 
-    private TestResult runMethod(Class<?> testClass, TestPlan plan, Method method, long runSeed) {
+    private List<TestResult> runConcurrent(
+            RunConfig config,
+            ExecutorService executor,
+            Class<?> testClass,
+            TestPlan plan,
+            List<TestNode> nodes,
+            FailureCorpus corpus) {
+        var results = new ArrayList<TestResult>();
+        var futures = new LinkedHashMap<TestNode, Future<TestResult>>();
+        for (var node : nodes) {
+            futures.put(node, executor.submit(() -> runMethod(testClass, plan, node.method(), config.seed(), corpus)));
+        }
+        for (var entry : futures.entrySet()) {
+            var node = entry.getKey();
+            var future = entry.getValue();
+            try {
+                var result = future.get();
+                results.add(result);
+                if (config.failFast() && result.failed()) {
+                    for (var f : futures.values()) {
+                        f.cancel(true);
+                    }
+                    break;
+                }
+            } catch (Throwable error) {
+                results.add(failedResult(testClass, node.method(), now(), 0, unwrap(error), Map.of()));
+                if (config.failFast()) {
+                    for (var f : futures.values()) {
+                        f.cancel(true);
+                    }
+                    break;
+                }
+            }
+        }
+        return results;
+    }
+
+    private TestResult runMethod(Class<?> testClass, TestPlan plan, Method method, long runSeed, FailureCorpus corpus) {
         long timeout = timeoutMillis(method);
         if (timeout <= 0) {
-            return executeMethod(testClass, plan, method, runSeed);
+            return executeMethod(testClass, plan, method, runSeed, corpus);
         }
         // Enforce the timeout from the moment the test actually starts, independent of whether
         // it runs sequentially or concurrently and independent of the order futures are consumed.
@@ -290,7 +323,7 @@ public final class TestRunner {
         var future = new java.util.concurrent.CompletableFuture<TestResult>();
         var worker = Thread.ofVirtual().name("axiomj-timeout-", 0).start(() -> {
             try {
-                future.complete(executeMethod(testClass, plan, method, runSeed));
+                future.complete(executeMethod(testClass, plan, method, runSeed, corpus));
             } catch (Throwable error) {
                 future.completeExceptionally(error);
             }
@@ -317,9 +350,10 @@ public final class TestRunner {
         }
     }
 
-    private TestResult executeMethod(Class<?> testClass, TestPlan plan, Method method, long runSeed) {
+    private TestResult executeMethod(
+            Class<?> testClass, TestPlan plan, Method method, long runSeed, FailureCorpus corpus) {
         if (method.isAnnotationPresent(Property.class)) {
-            return runProperty(testClass, plan, method, runSeed);
+            return runProperty(testClass, plan, method, runSeed, corpus);
         }
         return runFact(testClass, plan, method, runSeed);
     }
@@ -328,75 +362,125 @@ public final class TestRunner {
         long startedMillis = now();
         long startedNanos = System.nanoTime();
         var metadata = baseMetadata(runSeed);
-        Mocks.openSession();
-        SimpleContainer container = null;
-        try {
-            var invocation = newInvocation(testClass, method, runSeed, 0, false);
-            container = invocation.container();
-            invokeEach(plan.beforeEach(), invocation.instance(), invocation.container(), invocation.context());
+        var logger = new DefaultTestLogger();
+        return Mocks.inSession(() -> {
+            SimpleContainer container = null;
             try {
-                invoke(
-                        method,
-                        invocation.instance(),
-                        resolveParameters(method, invocation.container(), invocation.context(), null));
+                var invocation = newInvocation(testClass, method, runSeed, 0, false, logger);
+                container = invocation.container();
+                invokeEach(plan.beforeEach(), invocation.instance(), invocation.container(), invocation.context());
+                try {
+                    invoke(
+                            method,
+                            invocation.instance(),
+                            resolveParameters(method, invocation.container(), invocation.context(), null));
+                } finally {
+                    invokeEach(plan.afterEach(), invocation.instance(), invocation.container(), invocation.context());
+                }
+                Mocks.verifyStrictStubs();
+                metadata.put("log", logger.getOutput());
+                return passedResult(testClass, method, startedMillis, startedNanos, metadata);
+            } catch (Throwable error) {
+                metadata.put("log", logger.getOutput());
+                return failedResult(
+                        testClass, method, startedMillis, elapsedMillis(startedNanos), unwrap(error), metadata);
             } finally {
-                invokeEach(plan.afterEach(), invocation.instance(), invocation.container(), invocation.context());
+                if (container != null) {
+                    container.close();
+                }
             }
-            Mocks.verifyStrictStubs();
-            return passedResult(testClass, method, startedMillis, startedNanos, metadata);
-        } catch (Throwable error) {
-            return failedResult(testClass, method, startedMillis, elapsedMillis(startedNanos), unwrap(error), metadata);
-        } finally {
-            Mocks.closeSession();
-            if (container != null) {
-                container.close();
-            }
-        }
+        });
     }
 
-    private TestResult runProperty(Class<?> testClass, TestPlan plan, Method method, long runSeed) {
+    private TestResult runProperty(
+            Class<?> testClass, TestPlan plan, Method method, long runSeed, FailureCorpus corpus) {
         long startedMillis = now();
         long startedNanos = System.nanoTime();
         var property = method.getAnnotation(Property.class);
         long seed = property.seed() == Long.MIN_VALUE ? stableSeed(runSeed, testClass, method) : property.seed();
         var metadata = baseMetadata(seed);
         metadata.put("tries", property.tries());
-        Mocks.openSession();
-        try {
-            for (int attempt = 0; attempt < property.tries(); attempt++) {
-                var random = new SplittableRandom(seed + attempt * 1_000_003L);
-                Object[] generated = generatedArguments(method, random, seed, attempt);
-                try {
-                    invokePropertyOnce(testClass, plan, method, seed, attempt, generated);
-                } catch (Throwable failure) {
-                    Object[] minimized = shrink(testClass, plan, method, seed, attempt, generated);
-                    metadata.put("failingAttempt", attempt);
-                    metadata.put("sample", Arrays.deepToString(generated));
-                    metadata.put("minimizedSample", Arrays.deepToString(minimized));
-                    var message = "Property failed with seed %d at attempt %d; sample=%s; minimized=%s"
-                            .formatted(seed, attempt, Arrays.deepToString(generated), Arrays.deepToString(minimized));
-                    return failedResult(
-                            testClass,
-                            method,
-                            startedMillis,
-                            elapsedMillis(startedNanos),
-                            new AssertionError(message, unwrap(failure)),
-                            metadata);
+        return Mocks.inSession(() -> {
+            DefaultTestLogger lastLogger = new DefaultTestLogger();
+            try {
+                String methodId = id(testClass, method);
+                for (long corpusSeed : corpus.getSeeds(methodId)) {
+                    var random = new SplittableRandom(corpusSeed);
+                    Object[] generated = generatedArguments(method, random, corpusSeed, -1);
+                    var logger = new DefaultTestLogger();
+                    try {
+                        invokePropertyOnce(testClass, plan, method, corpusSeed, -1, generated, logger);
+                        corpus.removePass(methodId, corpusSeed);
+                        lastLogger = logger;
+                    } catch (Throwable failure) {
+                        Object[] minimized = shrink(testClass, plan, method, corpusSeed, -1, generated);
+                        metadata.put("failingAttempt", -1);
+                        metadata.put("sample", Arrays.deepToString(generated));
+                        metadata.put("minimizedSample", Arrays.deepToString(minimized));
+                        metadata.put("log", logger.getOutput());
+                        var message = "Property failed from corpus with seed %d; sample=%s; minimized=%s"
+                                .formatted(corpusSeed, Arrays.deepToString(generated), Arrays.deepToString(minimized));
+                        return failedResult(
+                                testClass,
+                                method,
+                                startedMillis,
+                                elapsedMillis(startedNanos),
+                                new AssertionError(message, unwrap(failure)),
+                                metadata);
+                    }
                 }
+
+                for (int attempt = 0; attempt < property.tries(); attempt++) {
+                    long currentSeed = seed + attempt * 1_000_003L;
+                    var random = new SplittableRandom(currentSeed);
+                    Object[] generated = generatedArguments(method, random, currentSeed, attempt);
+                    var logger = new DefaultTestLogger();
+                    try {
+                        invokePropertyOnce(testClass, plan, method, currentSeed, attempt, generated, logger);
+                        lastLogger = logger;
+                    } catch (Throwable failure) {
+                        Object[] minimized = shrink(testClass, plan, method, currentSeed, attempt, generated);
+                        corpus.addFailure(methodId, currentSeed);
+                        metadata.put("failingAttempt", attempt);
+                        metadata.put("sample", Arrays.deepToString(generated));
+                        metadata.put("minimizedSample", Arrays.deepToString(minimized));
+                        metadata.put("log", logger.getOutput());
+                        var message = "Property failed with seed %d at attempt %d; sample=%s; minimized=%s"
+                                .formatted(
+                                        currentSeed,
+                                        attempt,
+                                        Arrays.deepToString(generated),
+                                        Arrays.deepToString(minimized));
+                        return failedResult(
+                                testClass,
+                                method,
+                                startedMillis,
+                                elapsedMillis(startedNanos),
+                                new AssertionError(message, unwrap(failure)),
+                                metadata);
+                    }
+                }
+                Mocks.verifyStrictStubs();
+                metadata.put("log", lastLogger.getOutput());
+                return passedResult(testClass, method, startedMillis, startedNanos, metadata);
+            } catch (Throwable error) {
+                metadata.put("log", lastLogger.getOutput());
+                return failedResult(
+                        testClass, method, startedMillis, elapsedMillis(startedNanos), unwrap(error), metadata);
             }
-            Mocks.verifyStrictStubs();
-            return passedResult(testClass, method, startedMillis, startedNanos, metadata);
-        } catch (Throwable error) {
-            return failedResult(testClass, method, startedMillis, elapsedMillis(startedNanos), unwrap(error), metadata);
-        } finally {
-            Mocks.closeSession();
-        }
+        });
     }
 
     private void invokePropertyOnce(
-            Class<?> testClass, TestPlan plan, Method method, long seed, int attempt, Object[] generated)
+            Class<?> testClass,
+            TestPlan plan,
+            Method method,
+            long seed,
+            int attempt,
+            Object[] generated,
+            DefaultTestLogger logger)
             throws Throwable {
-        var invocation = newInvocation(testClass, method, seed, attempt, true);
+        var invocation = newInvocation(testClass, method, seed, attempt, true, logger);
         try {
             invokeEach(plan.beforeEach(), invocation.instance(), invocation.container(), invocation.context());
             try {
@@ -416,6 +500,7 @@ public final class TestRunner {
             Class<?> testClass, TestPlan plan, Method method, long seed, int attempt, Object[] failing) {
         var current = failing.clone();
         var types = method.getParameterTypes();
+        var genericTypes = method.getGenericParameterTypes();
         var annotations = method.getParameterAnnotations();
         int remainingTrials = MAX_SHRINK_TRIALS;
         boolean improved = true;
@@ -425,14 +510,14 @@ public final class TestRunner {
                 if (!hasAnnotation(annotations[i], ForAll.class)) {
                     continue;
                 }
-                for (Object candidate : Shrinker.candidates(types[i], annotations[i], current[i])) {
+                for (Object candidate : Shrinker.candidates(types[i], genericTypes[i], annotations[i], current[i])) {
                     if (remainingTrials-- <= 0) {
                         break;
                     }
                     var trial = current.clone();
                     trial[i] = candidate;
                     try {
-                        invokePropertyOnce(testClass, plan, method, seed, attempt, trial);
+                        invokePropertyOnce(testClass, plan, method, seed, attempt, trial, new DefaultTestLogger());
                     } catch (Throwable stillFails) {
                         current = trial;
                         improved = true;
@@ -447,20 +532,23 @@ public final class TestRunner {
 
     private Object[] generatedArguments(Method method, SplittableRandom random, long seed, int attempt) {
         var types = method.getParameterTypes();
+        var genericTypes = method.getGenericParameterTypes();
         var annotations = method.getParameterAnnotations();
         var args = new Object[types.length];
         for (int i = 0; i < types.length; i++) {
             if (hasAnnotation(annotations[i], ForAll.class)) {
                 args[i] = BuiltInGenerators.generate(
-                        types[i], annotations[i], new GenerationContext(random, seed, attempt));
+                        types[i], genericTypes[i], annotations[i], new GenerationContext(random, seed, attempt));
             }
         }
         return args;
     }
 
-    private Invocation newInvocation(Class<?> testClass, Method method, long seed, int attempt, boolean property)
+    private Invocation newInvocation(
+            Class<?> testClass, Method method, long seed, int attempt, boolean property, DefaultTestLogger logger)
             throws ReflectiveOperationException {
         var container = classRoot.child();
+        container.bindInstance(su.kidoz.axiomj.api.TestLogger.class, logger);
         var context = new TestContext(
                 testClass.getName() + "#" + method.getName(), displayName(method), seed, attempt, property);
         var instance = constructTest(testClass, container, context);
@@ -468,11 +556,23 @@ public final class TestRunner {
         return new Invocation(instance, container, context);
     }
 
-    private SimpleContainer rootContainerFor(Class<?> testClass) throws ReflectiveOperationException {
+    private SimpleContainer rootContainerFor(Class<?> testClass, List<String> activeProfiles)
+            throws ReflectiveOperationException {
         var root = new SimpleContainer();
         var modules = testClass.getAnnotation(UseModules.class);
         if (modules != null) {
             for (Class<? extends TestModule> moduleType : modules.value()) {
+                var profile = moduleType.getAnnotation(Profile.class);
+                if (profile != null) {
+                    boolean active = false;
+                    for (String p : profile.value()) {
+                        if (activeProfiles.contains(p)) {
+                            active = true;
+                            break;
+                        }
+                    }
+                    if (!active) continue;
+                }
                 var module = moduleType.getDeclaredConstructor().newInstance();
                 module.configure(root);
             }
@@ -639,13 +739,24 @@ public final class TestRunner {
 
     private static Object resolveValue(Class<?> type, Value value, SimpleContainer container) {
         var config = container.getIfBound(Config.class);
+        if (config == null) {
+            if (type.isRecord()) {
+                throw new IllegalStateException("@Value(\"" + value.value() + "\") on record type requires @UseConfig");
+            }
+            if (Value.UNSET.equals(value.orElse())) {
+                throw new IllegalStateException(
+                        "@Value(\"" + value.value() + "\") requires @UseConfig on the test class");
+            }
+            return coerce(value.orElse(), type);
+        }
+        if (type.isRecord()) {
+            return config.getRecord(value.value(), type);
+        }
         String raw;
-        if (config != null && config.find(value.value()).isPresent()) {
+        if (config.find(value.value()).isPresent()) {
             raw = config.find(value.value()).get();
         } else if (!Value.UNSET.equals(value.orElse())) {
             raw = value.orElse();
-        } else if (config == null) {
-            throw new IllegalStateException("@Value(\"" + value.value() + "\") requires @UseConfig on the test class");
         } else {
             throw new IllegalStateException("Missing config key for @Value(\"" + value.value() + "\")");
         }

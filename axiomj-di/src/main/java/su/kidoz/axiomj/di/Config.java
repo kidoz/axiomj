@@ -42,4 +42,32 @@ public final class Config {
     public double getDouble(String key) {
         return Double.parseDouble(get(key));
     }
+
+    public <T> T getRecord(String keyPrefix, Class<T> recordType) {
+        if (!recordType.isRecord()) {
+            throw new IllegalArgumentException(recordType.getName() + " is not a record type");
+        }
+        try {
+            var components = recordType.getRecordComponents();
+            var types = java.util.Arrays.stream(components)
+                    .map(java.lang.reflect.RecordComponent::getType)
+                    .toArray(Class<?>[]::new);
+            var args = new Object[components.length];
+            for (int i = 0; i < components.length; i++) {
+                String propKey = keyPrefix + "." + components[i].getName();
+                Class<?> type = types[i];
+                if (type == String.class) args[i] = get(propKey);
+                else if (type == int.class || type == Integer.class) args[i] = getInt(propKey);
+                else if (type == long.class || type == Long.class) args[i] = getLong(propKey);
+                else if (type == boolean.class || type == Boolean.class) args[i] = getBoolean(propKey);
+                else if (type == double.class || type == Double.class) args[i] = getDouble(propKey);
+                else throw new IllegalArgumentException("Unsupported record component type: " + type);
+            }
+            var constructor = recordType.getDeclaredConstructor(types);
+            constructor.setAccessible(true);
+            return constructor.newInstance(args);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to coerce config into " + recordType.getName(), e);
+        }
+    }
 }

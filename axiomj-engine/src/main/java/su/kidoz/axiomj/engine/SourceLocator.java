@@ -49,7 +49,7 @@ final class SourceLocator {
                     return new SourceLocation(sourceFile, start + 1 <= end ? start + 1 : start, start, end);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception _) {
         }
         return new SourceLocation(sourceFile, 0, 0, 0);
     }

@@ -12,14 +12,22 @@ public record RunConfig(
         long seed,
         int parallelism,
         boolean sequential,
+        boolean failFast,
+        boolean scanClasspath,
+        List<String> includePackages,
+        List<String> excludePackages,
         List<String> featureFilters,
         List<String> tagFilters,
         List<String> ownerFilters,
         List<String> areaFilters,
         List<String> requirementFilters,
+        List<String> activeProfiles,
         boolean help) {
     static RunConfig parse(String[] args) {
         var classes = new ArrayList<String>();
+        var includePackages = new ArrayList<String>();
+        var excludePackages = new ArrayList<String>();
+        var activeProfiles = new ArrayList<String>();
         var features = new ArrayList<String>();
         var tags = new ArrayList<String>();
         var owners = new ArrayList<String>();
@@ -31,6 +39,8 @@ public record RunConfig(
         long seed = System.nanoTime();
         int parallelism = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 8));
         boolean sequential = false;
+        boolean failFast = false;
+        boolean scanClasspath = false;
         boolean help = false;
         for (String arg : args) {
             if (arg.startsWith("--json=")) {
@@ -64,6 +74,16 @@ public record RunConfig(
             } else if (arg.equals("--sequential")) {
                 sequential = true;
                 parallelism = 1;
+            } else if (arg.equals("--fail-fast")) {
+                failFast = true;
+            } else if (arg.equals("--scan-classpath")) {
+                scanClasspath = true;
+            } else if (arg.startsWith("--include-package=")) {
+                includePackages.add(arg.substring("--include-package=".length()));
+            } else if (arg.startsWith("--exclude-package=")) {
+                excludePackages.add(arg.substring("--exclude-package=".length()));
+            } else if (arg.startsWith("--profile=")) {
+                activeProfiles.add(arg.substring("--profile=".length()));
             } else if (arg.startsWith("--execution=")) {
                 String mode = arg.substring("--execution=".length()).trim().toLowerCase();
                 switch (mode) {
@@ -98,11 +118,16 @@ public record RunConfig(
                 seed,
                 parallelism,
                 sequential,
+                failFast,
+                scanClasspath,
+                List.copyOf(includePackages),
+                List.copyOf(excludePackages),
                 List.copyOf(features),
                 List.copyOf(tags),
                 List.copyOf(owners),
                 List.copyOf(areas),
                 List.copyOf(requirements),
+                List.copyOf(activeProfiles),
                 help);
     }
 }

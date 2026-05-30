@@ -5,11 +5,38 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
         var config = RunConfig.parse(args);
-        if (config.help() || config.classNames().isEmpty()) {
+
+        java.util.List<String> classesToRun = new java.util.ArrayList<>(config.classNames());
+        if (config.scanClasspath()) {
+            classesToRun.addAll(ClasspathScanner.scan(config));
+        }
+
+        if (config.help() || classesToRun.isEmpty()) {
             printUsage();
             return;
         }
-        var summary = new TestRunner(System.out).run(config);
+
+        var effectiveConfig = new RunConfig(
+                classesToRun,
+                config.jsonReport(),
+                config.markdownReport(),
+                config.allureResultsDir(),
+                config.seed(),
+                config.parallelism(),
+                config.sequential(),
+                config.failFast(),
+                config.scanClasspath(),
+                config.includePackages(),
+                config.excludePackages(),
+                config.featureFilters(),
+                config.tagFilters(),
+                config.ownerFilters(),
+                config.areaFilters(),
+                config.requirementFilters(),
+                config.activeProfiles(),
+                config.help());
+
+        var summary = new TestRunner(System.out).run(effectiveConfig);
         if (summary.failed() > 0) {
             System.exit(1);
         }
@@ -28,7 +55,15 @@ public final class Main {
         System.out.println("  --seed=long          Set run seed for generated properties");
         System.out.println("  --parallelism=N      Run independent tests concurrently with N virtual workers");
         System.out.println("  --sequential         Alias for --parallelism=1");
+        System.out.println("  --fail-fast          Abort the test run on the first failure");
+        System.out.println("  --scan-classpath     Scan the classpath for tests");
+        System.out.println("  --include-package=P  Only include tests in package P (used with --scan-classpath)");
+        System.out.println("  --exclude-package=P  Exclude tests in package P (used with --scan-classpath)");
         System.out.println("  --execution=mode     sequential, concurrent, or parallel");
         System.out.println("  --feature=id         Run only matching feature id/name/area; supports trailing *");
+        System.out.println("  --tag=name           Run only matching tags");
+        System.out.println("  --owner=name         Run only matching owners");
+        System.out.println("  --area=name          Run only matching product areas");
+        System.out.println("  --requirement=id     Run only matching requirements");
     }
 }

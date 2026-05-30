@@ -161,4 +161,31 @@ class RunConfigTest {
         expect(RunConfig.parse(new String[] {"--help"}).help()).isTrue();
         expect(RunConfig.parse(new String[] {"-h"}).help()).isTrue();
     }
+
+    @Fact
+    void parsesFailFast() {
+        var config = RunConfig.parse(new String[] {"--fail-fast"});
+        expect(config.failFast()).isTrue();
+    }
+
+    @Fact
+    void parsesScanClasspath() {
+        var config = RunConfig.parse(new String[] {"--scan-classpath"});
+        expect(config.scanClasspath()).isTrue();
+    }
+
+    @Fact
+    void parsesIncludePackages() {
+        var config = RunConfig.parse(new String[] {"--include-package=com.example", "--include-package=org.test"});
+        expect(config.includePackages().size()).isEqualTo(2);
+        expect(config.includePackages().get(0)).isEqualTo("com.example");
+        expect(config.includePackages().get(1)).isEqualTo("org.test");
+    }
+
+    @Fact
+    void parsesExcludePackages() {
+        var config = RunConfig.parse(new String[] {"--exclude-package=com.example.slow"});
+        expect(config.excludePackages().size()).isEqualTo(1);
+        expect(config.excludePackages().get(0)).isEqualTo("com.example.slow");
+    }
 }
