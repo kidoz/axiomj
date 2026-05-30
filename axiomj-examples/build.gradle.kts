@@ -26,6 +26,11 @@ tasks.named("axiomjTest", su.kidoz.axiomj.plugin.AxiomJTestTask::class.java) {
     testClasses.set(axiomjExampleClasses)
 }
 
+// Run the bundled example suite as part of the build gate (`check`/`build`/CI).
+tasks.named("check") {
+    dependsOn("axiomjTest")
+}
+
 // keep runExamples for backward compatibility in the scripts for now
 tasks.register<JavaExec>("runExamples") {
     group = "verification"
