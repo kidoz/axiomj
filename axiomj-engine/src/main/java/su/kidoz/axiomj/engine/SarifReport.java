@@ -37,7 +37,12 @@ public final class SarifReport {
             first = false;
 
             String className = result.className();
-            String fileUri = "src/test/java/" + className.replace('.', '/') + ".java";
+            // Reuse the source path already resolved by the runner (configurable via -Daxiomj.sourceRoots),
+            // falling back to the conventional Java test layout only if it is unavailable.
+            String fileUri = result.sourceFile();
+            if (fileUri == null || fileUri.isBlank()) {
+                fileUri = "src/test/java/" + className.replace('.', '/') + ".java";
+            }
             // In a full implementation, we'd parse the stack trace to find the exact line.
             // For now, we fall back to line 1 of the test class file.
             int line = 1;

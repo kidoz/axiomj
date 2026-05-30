@@ -47,6 +47,11 @@ public final class TestRunner {
     // the reported sample is, never correctness.
     private static final int MAX_SHRINK_TRIALS = 200;
 
+    // Grace period to let an interrupted/cancelled test thread unwind (release shared services, finish
+    // cleanup) before the runner proceeds to class teardown. Cooperative tests stop well within this;
+    // non-cooperative ones cannot be force-killed on the JVM, so this only bounds the race window.
+    private static final long ABORT_DRAIN_MILLIS = 500;
+
     // Cache of instantiated @ForAll(gen = ...) custom generators, keyed by generator class.
     private static final java.util.concurrent.ConcurrentHashMap<Class<?>, su.kidoz.axiomj.property.Arbitrary<?>>
             ARBITRARY_GENERATORS = new java.util.concurrent.ConcurrentHashMap<>();
@@ -89,52 +94,61 @@ public final class TestRunner {
             }
         }
 
+        // A @BeforeSuite failure is recorded as a failed result and the test classes are skipped, rather than
+        // calling System.exit — run(...) is a library API and only Main decides the process exit code.
+        boolean suiteSetupOk = true;
         try {
             invokeAllStatic(allBeforeSuite);
         } catch (Throwable error) {
-            System.err.println("Fatal: @BeforeSuite failed.");
-            error.printStackTrace();
-            System.exit(1);
+            var result = suiteFailureResult("@BeforeSuite", unwrap(error));
+            results.add(result);
+            print(result);
+            suiteSetupOk = false;
         }
 
-        try (ExecutorService executor = Executors.newFixedThreadPool(config.parallelism(), threadFactory)) {
-            for (Class<?> testClass : parsedClasses) {
-                if (config.failFast() && results.stream().anyMatch(TestResult::failed)) {
-                    break;
-                }
-                try {
-                    var plan = TestPlan.of(testClass);
-                    var root = rootContainerFor(testClass, config.activeProfiles());
-                    classRoot = root;
-                    boolean beforeAllDone = false;
-                    try {
-                        invokeAllStatic(plan.beforeAll());
-                        beforeAllDone = true;
-                        var classResults = runClass(config, executor, testClass, plan, corpus);
-                        results.addAll(classResults);
-                    } finally {
-                        try {
-                            if (beforeAllDone) {
-                                invokeAllStatic(plan.afterAll());
-                            }
-                        } finally {
-                            classRoot = null;
-                            root.close();
-                        }
+        if (suiteSetupOk) {
+            try (ExecutorService executor = Executors.newFixedThreadPool(config.parallelism(), threadFactory)) {
+                for (Class<?> testClass : parsedClasses) {
+                    if (config.failFast() && results.stream().anyMatch(TestResult::failed)) {
+                        break;
                     }
-                } catch (Throwable error) {
-                    var result = classFailureResult(testClass.getName(), unwrap(error));
-                    results.add(result);
-                    print(result);
+                    try {
+                        var plan = TestPlan.of(testClass);
+                        var root = rootContainerFor(testClass, config.activeProfiles());
+                        classRoot = root;
+                        boolean beforeAllDone = false;
+                        try {
+                            invokeAllStatic(plan.beforeAll());
+                            beforeAllDone = true;
+                            var classResults = runClass(config, executor, testClass, plan, corpus);
+                            results.addAll(classResults);
+                        } finally {
+                            try {
+                                if (beforeAllDone) {
+                                    invokeAllStatic(plan.afterAll());
+                                }
+                            } finally {
+                                classRoot = null;
+                                root.close();
+                            }
+                        }
+                    } catch (Throwable error) {
+                        var result = classFailureResult(testClass.getName(), unwrap(error));
+                        results.add(result);
+                        print(result);
+                    }
                 }
             }
-        }
 
-        try {
-            invokeAllStatic(allAfterSuite);
-        } catch (Throwable error) {
-            System.err.println("Warning: @AfterSuite failed.");
-            error.printStackTrace();
+            // A @AfterSuite failure is a real failure (it can leave global state dirty), so it becomes a failed
+            // result reflected in the summary rather than a silent warning that lets the run pass.
+            try {
+                invokeAllStatic(allAfterSuite);
+            } catch (Throwable error) {
+                var result = suiteFailureResult("@AfterSuite", unwrap(error));
+                results.add(result);
+                print(result);
+            }
         }
 
         corpus.save();
@@ -338,29 +352,65 @@ public final class TestRunner {
         for (var node : nodes) {
             futures.put(node, executor.submit(() -> runMethod(testClass, plan, node.method(), config.seed(), corpus)));
         }
+        boolean aborted = false;
         for (var entry : futures.entrySet()) {
+            if (aborted) {
+                break;
+            }
             var node = entry.getKey();
             var future = entry.getValue();
             try {
                 var result = future.get();
                 results.add(result);
                 if (config.failFast() && result.failed()) {
-                    for (var f : futures.values()) {
-                        f.cancel(true);
-                    }
-                    break;
+                    cancelAndDrain(futures.values());
+                    aborted = true;
                 }
             } catch (Throwable error) {
                 results.add(failedResult(testClass, node.method(), now(), 0, unwrap(error), Map.of()));
                 if (config.failFast()) {
-                    for (var f : futures.values()) {
-                        f.cancel(true);
-                    }
-                    break;
+                    cancelAndDrain(futures.values());
+                    aborted = true;
+                }
+            }
+        }
+        if (aborted) {
+            // Tests cancelled by --fail-fast (no result collected) are reported as skipped rather than
+            // vanishing silently from the report.
+            var collected = new LinkedHashSet<String>();
+            for (var result : results) {
+                collected.add(result.methodName());
+            }
+            for (var node : nodes) {
+                if (!collected.contains(node.method().getName())) {
+                    results.add(skippedResult(testClass, node.method(), "Skipped: run aborted by --fail-fast"));
                 }
             }
         }
         return results;
+    }
+
+    // Cancels every future, then waits a bounded time for them to settle, so in-flight tests stop
+    // touching shared state before the class container is closed. Best-effort.
+    private static void cancelAndDrain(java.util.Collection<Future<TestResult>> futures) {
+        for (var future : futures) {
+            future.cancel(true);
+        }
+        for (var future : futures) {
+            try {
+                future.get(ABORT_DRAIN_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (Throwable ignored) {
+                // cancelled/failed/slow — best-effort drain, nothing to do
+            }
+        }
+    }
+
+    private static void joinQuietly(Thread thread, long millis) {
+        try {
+            thread.join(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private TestResult runMethod(Class<?> testClass, TestPlan plan, Method method, long runSeed, FailureCorpus corpus) {
@@ -384,6 +434,9 @@ public final class TestRunner {
             return future.get(timeout, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             worker.interrupt();
+            // Give the interrupted test a bounded chance to unwind before the class root is torn down,
+            // so a cooperative test stops touching shared services before they are closed.
+            joinQuietly(worker, ABORT_DRAIN_MILLIS);
             return failedResult(
                     testClass,
                     method,
@@ -456,14 +509,11 @@ public final class TestRunner {
                 var invocation = newInvocation(testClass, method, runSeed, 0, false, logger);
                 container = invocation.container();
                 invokeEach(plan.beforeEach(), invocation.instance(), invocation.container(), invocation.context());
-                try {
-                    invoke(
-                            method,
-                            invocation.instance(),
-                            resolveParameters(method, invocation.container(), invocation.context(), null));
-                } finally {
-                    invokeEach(plan.afterEach(), invocation.instance(), invocation.container(), invocation.context());
-                }
+                invokeBodyThenAfterEach(
+                        method,
+                        invocation,
+                        plan.afterEach(),
+                        resolveParameters(method, invocation.container(), invocation.context(), null));
                 Mocks.verifyStrictStubs();
                 metadata.put("log", logger.getOutput());
                 return passedResult(testClass, method, startedMillis, startedNanos, metadata);
@@ -570,16 +620,38 @@ public final class TestRunner {
         var invocation = newInvocation(testClass, method, seed, attempt, true, logger);
         try {
             invokeEach(plan.beforeEach(), invocation.instance(), invocation.container(), invocation.context());
-            try {
-                invoke(
-                        method,
-                        invocation.instance(),
-                        resolveParameters(method, invocation.container(), invocation.context(), generated));
-            } finally {
-                invokeEach(plan.afterEach(), invocation.instance(), invocation.container(), invocation.context());
-            }
+            invokeBodyThenAfterEach(
+                    method,
+                    invocation,
+                    plan.afterEach(),
+                    resolveParameters(method, invocation.container(), invocation.context(), generated));
         } finally {
             invocation.container().close();
+        }
+    }
+
+    // Runs the test body and then @AfterEach, preserving the *primary* failure: if the body fails and
+    // cleanup also fails, the body's throwable is reported and the cleanup failure is attached as a
+    // suppressed exception, rather than the cleanup failure masking the real cause.
+    private void invokeBodyThenAfterEach(Method method, Invocation invocation, List<Method> afterEach, Object[] args)
+            throws Throwable {
+        Throwable primary = null;
+        try {
+            invoke(method, invocation.instance(), args);
+        } catch (Throwable bodyError) {
+            primary = bodyError;
+        }
+        try {
+            invokeEach(afterEach, invocation.instance(), invocation.container(), invocation.context());
+        } catch (Throwable cleanupError) {
+            if (primary != null) {
+                primary.addSuppressed(cleanupError);
+            } else {
+                primary = cleanupError;
+            }
+        }
+        if (primary != null) {
+            throw primary;
         }
     }
 
@@ -1043,6 +1115,33 @@ public final class TestRunner {
                 Map.of("thread", Thread.currentThread().getName()));
     }
 
+    private TestResult suiteFailureResult(String hook, Throwable error) {
+        long started = now();
+        var descriptor = new TestDescriptor(
+                hook,
+                hook,
+                hook,
+                hook,
+                List.of(),
+                "",
+                "",
+                "",
+                "",
+                "Suite lifecycle",
+                List.of(),
+                new SourceLocation("", 0, 0, 0),
+                List.of(),
+                0);
+        return new TestResult(
+                descriptor,
+                TestStatus.FAILED,
+                started,
+                started,
+                0,
+                error,
+                Map.of("thread", Thread.currentThread().getName()));
+    }
+
     private void print(TestResult result) {
         var prefix =
                 switch (result.status()) {
@@ -1312,9 +1411,34 @@ public final class TestRunner {
         return requirements.stream().filter(Objects::nonNull).distinct().toList();
     }
 
+    // Source roots searched to map a class to its source file. Defaults cover the standard Gradle Java/Kotlin
+    // test layouts; override with -Daxiomj.sourceRoots=dir1,dir2 for custom or multi-module source sets.
+    private static final List<String> SOURCE_ROOTS = sourceRoots();
+
+    private static List<String> sourceRoots() {
+        var configured = System.getProperty("axiomj.sourceRoots");
+        if (configured == null || configured.isBlank()) {
+            return List.of("src/test/java", "src/test/kotlin");
+        }
+        return Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(root -> !root.isEmpty())
+                .toList();
+    }
+
     private static String sourceFile(String className) {
         var topLevel = className.contains("$") ? className.substring(0, className.indexOf('$')) : className;
-        return "src/test/java/" + topLevel.replace('.', '/') + ".java";
+        var relative = topLevel.replace('.', '/');
+        for (var root : SOURCE_ROOTS) {
+            for (var extension : new String[] {".java", ".kt"}) {
+                var candidate = root + "/" + relative + extension;
+                if (java.nio.file.Files.isRegularFile(java.nio.file.Path.of(candidate))) {
+                    return candidate;
+                }
+            }
+        }
+        // Nothing on disk matched (generated sources, different module, etc.) — fall back to the first root.
+        return SOURCE_ROOTS.get(0) + "/" + relative + ".java";
     }
 
     private static long elapsedMillis(long startedNanos) {
