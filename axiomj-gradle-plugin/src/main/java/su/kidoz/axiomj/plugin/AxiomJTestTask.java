@@ -37,9 +37,34 @@ public abstract class AxiomJTestTask extends DefaultTask {
     @Optional
     public abstract DirectoryProperty getAllureResultsDir();
 
+    @OutputFile
+    @Optional
+    public abstract RegularFileProperty getJunitXmlReport();
+
+    @OutputFile
+    @Optional
+    public abstract RegularFileProperty getSarifReport();
+
+    @OutputFile
+    @Optional
+    public abstract RegularFileProperty getHtmlReport();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getFailFast();
+
+    @Input
+    @Optional
+    public abstract Property<Long> getSeed();
+
     @Input
     @Optional
     public abstract ListProperty<String> getTestClasses();
+
+    /** Extra raw CLI arguments passed through verbatim (e.g. {@code --feature=...}, {@code --tag=...}). */
+    @Input
+    @Optional
+    public abstract ListProperty<String> getExtraArgs();
 
     @Inject
     protected abstract ExecOperations getExecOperations();
@@ -62,6 +87,24 @@ public abstract class AxiomJTestTask extends DefaultTask {
             }
             if (getAllureResultsDir().isPresent()) {
                 argsList.add("--allure-results=" + getAllureResultsDir().get().getAsFile().getAbsolutePath());
+            }
+            if (getJunitXmlReport().isPresent()) {
+                argsList.add("--junit-xml=" + getJunitXmlReport().get().getAsFile().getAbsolutePath());
+            }
+            if (getSarifReport().isPresent()) {
+                argsList.add("--sarif=" + getSarifReport().get().getAsFile().getAbsolutePath());
+            }
+            if (getHtmlReport().isPresent()) {
+                argsList.add("--html=" + getHtmlReport().get().getAsFile().getAbsolutePath());
+            }
+            if (getFailFast().getOrElse(false)) {
+                argsList.add("--fail-fast");
+            }
+            if (getSeed().isPresent()) {
+                argsList.add("--seed=" + getSeed().get());
+            }
+            if (getExtraArgs().isPresent()) {
+                argsList.addAll(getExtraArgs().get());
             }
             if (getTestClasses().isPresent()) {
                 argsList.addAll(getTestClasses().get());

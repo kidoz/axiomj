@@ -4,7 +4,7 @@ import static su.kidoz.axiomj.assertions.Expect.expect;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import su.kidoz.axiomj.api.DependsBy;
+import su.kidoz.axiomj.api.DependsOn;
 import su.kidoz.axiomj.api.Fact;
 import su.kidoz.axiomj.api.Feature;
 import su.kidoz.axiomj.api.Order;
@@ -36,7 +36,7 @@ public final class FeatureWorkflowTest {
     }
 
     @Fact(tags = "workflow")
-    @DependsBy("sendWelcomeEmail")
+    @DependsOn("sendWelcomeEmail")
     @Order(3)
     @Scenario("audit event is written after welcome email")
     @Requirement("REQ-ID-102")

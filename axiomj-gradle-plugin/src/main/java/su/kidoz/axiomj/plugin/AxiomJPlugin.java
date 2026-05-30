@@ -22,10 +22,16 @@ public class AxiomJPlugin implements Plugin<Project> {
                 task.getClasspath().from(testSourceSet.getRuntimeClasspath());
             });
 
+            var buildDir = project.getLayout().getBuildDirectory();
             task.getParallelism().convention(axiomjExt.getParallelism());
-            task.getJsonReport().convention(project.getLayout().getBuildDirectory().file("reports/axiomj/report.json"));
-            task.getMarkdownReport().convention(project.getLayout().getBuildDirectory().file("reports/axiomj/report.md"));
-            task.getAllureResultsDir().convention(project.getLayout().getBuildDirectory().dir("allure-results"));
+            task.getFailFast().convention(axiomjExt.getFailFast());
+            task.getSeed().convention(axiomjExt.getSeed());
+            task.getJsonReport().convention(buildDir.file("reports/axiomj/report.json"));
+            task.getMarkdownReport().convention(buildDir.file("reports/axiomj/report.md"));
+            task.getJunitXmlReport().convention(buildDir.file("reports/axiomj/TEST-axiomj.xml"));
+            task.getSarifReport().convention(buildDir.file("reports/axiomj/axiomj.sarif"));
+            task.getHtmlReport().convention(buildDir.file("reports/axiomj/axiomj.html"));
+            task.getAllureResultsDir().convention(buildDir.dir("allure-results"));
         });
     }
 }

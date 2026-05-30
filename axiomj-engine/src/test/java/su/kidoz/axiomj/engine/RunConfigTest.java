@@ -85,6 +85,28 @@ class RunConfigTest {
     }
 
     @Fact
+    void throwsOnUnknownOption() {
+        boolean thrown = false;
+        try {
+            RunConfig.parse(new String[] {"--paralellism=4"});
+        } catch (IllegalArgumentException e) {
+            thrown = true;
+            expect(e.getMessage()).contains("Unknown option: --paralellism=4");
+        }
+        expect(thrown).isTrue();
+    }
+
+    @Fact
+    void withClassNamesReplacesOnlyClasses() {
+        var config = RunConfig.parse(new String[] {"--seed=7", "--parallelism=3", "examples.Original"});
+        var updated = config.withClassNames(java.util.List.of("examples.A", "examples.B"));
+        expect(updated.classNames().size()).isEqualTo(2);
+        expect(updated.classNames().get(0)).isEqualTo("examples.A");
+        expect(updated.seed()).isEqualTo(7L);
+        expect(updated.parallelism()).isEqualTo(3);
+    }
+
+    @Fact
     void parsesParallelism() {
         var config = RunConfig.parse(new String[] {"--parallelism=16"});
         expect(config.parallelism()).isEqualTo(16);

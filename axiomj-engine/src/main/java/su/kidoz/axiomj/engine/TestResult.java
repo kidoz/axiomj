@@ -87,18 +87,6 @@ public record TestResult(
         return descriptor.featureLabel();
     }
 
-    public TestMetadata metadataInfo() {
-        return new TestMetadata(productArea(), featureId(), featureName(), "", scenario(), owner(), requirements());
-    }
-
-    public long startEpochMillis() {
-        return startMillis;
-    }
-
-    public long stopEpochMillis() {
-        return stopMillis;
-    }
-
     public String skipReason() {
         Object reason = metadata.get("skipReason");
         if (reason != null) return String.valueOf(reason);

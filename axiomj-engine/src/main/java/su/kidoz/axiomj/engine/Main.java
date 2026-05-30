@@ -16,28 +16,7 @@ public final class Main {
             return;
         }
 
-        var effectiveConfig = new RunConfig(
-                classesToRun,
-                config.jsonReport(),
-                config.markdownReport(),
-                config.allureResultsDir(),
-                config.junitXmlReport(),
-                config.sarifReport(),
-                config.htmlReport(),
-                config.seed(),
-                config.parallelism(),
-                config.sequential(),
-                config.failFast(),
-                config.scanClasspath(),
-                config.includePackages(),
-                config.excludePackages(),
-                config.featureFilters(),
-                config.tagFilters(),
-                config.ownerFilters(),
-                config.areaFilters(),
-                config.requirementFilters(),
-                config.activeProfiles(),
-                config.help());
+        var effectiveConfig = config.withClassNames(classesToRun);
 
         var summary = new TestRunner(System.out).run(effectiveConfig);
         if (summary.failed() > 0) {

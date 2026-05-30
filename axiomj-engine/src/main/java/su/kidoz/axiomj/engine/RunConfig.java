@@ -26,6 +26,33 @@ public record RunConfig(
         List<String> requirementFilters,
         List<String> activeProfiles,
         boolean help) {
+
+    /** Returns a copy with {@code classNames} replaced, leaving every other field untouched. */
+    public RunConfig withClassNames(List<String> classNames) {
+        return new RunConfig(
+                List.copyOf(classNames),
+                jsonReport,
+                markdownReport,
+                allureResultsDir,
+                junitXmlReport,
+                sarifReport,
+                htmlReport,
+                seed,
+                parallelism,
+                sequential,
+                failFast,
+                scanClasspath,
+                includePackages,
+                excludePackages,
+                featureFilters,
+                tagFilters,
+                ownerFilters,
+                areaFilters,
+                requirementFilters,
+                activeProfiles,
+                help);
+    }
+
     static RunConfig parse(String[] args) {
         var classes = new ArrayList<String>();
         var includePackages = new ArrayList<String>();
@@ -122,6 +149,8 @@ public record RunConfig(
                 requirements.add(arg.substring("--requirement=".length()));
             } else if (arg.equals("--help") || arg.equals("-h")) {
                 help = true;
+            } else if (arg.startsWith("--")) {
+                throw new IllegalArgumentException("Unknown option: " + arg + " (use --help to list options)");
             } else {
                 classes.add(arg);
             }
