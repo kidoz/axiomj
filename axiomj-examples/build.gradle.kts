@@ -36,6 +36,7 @@ tasks.register<JavaExec>("runExamples") {
         "--parallelism=4",
         "--json=${layout.buildDirectory.file("reports/axiomj/report.json").get().asFile}",
         "--markdown=${layout.buildDirectory.file("reports/axiomj/report.md").get().asFile}",
+        "--junit-xml=${layout.buildDirectory.file("reports/axiomj/TEST-axiomj.xml").get().asFile}",
         "--allure-results=${layout.buildDirectory.dir("allure-results").get().asFile}",
         *axiomjExampleClasses.toTypedArray(),
     )

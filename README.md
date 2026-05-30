@@ -184,12 +184,13 @@ The runner writes plain console output plus optional machine-readable reports:
 ```text
 --json=build/report.json
 --markdown=build/report.md
+--junit-xml=build/TEST-axiomj.xml
 --allure-results=build/allure-results
 ```
 
 The Markdown report is designed to be read by humans and coding agents: it includes the
 summary, per-test status, feature and scenario metadata, source-file path, dependency chain,
-property seeds/samples, and failure details. The `runExamples` Gradle task produces all three
+property seeds/samples, and failure details. The `runExamples` Gradle task produces all four
 report formats under `build/`.
 
 ## Development

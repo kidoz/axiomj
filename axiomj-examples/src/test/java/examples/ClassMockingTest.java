@@ -34,6 +34,29 @@ public final class ClassMockingTest {
         expect(calc.add(2, 2)).isEqualTo(0);
     }
 
+    @Fact(name = "constructor-free instantiation")
+    @Scenario("Objenesis allows mocking classes that have no default constructor")
+    void constructorFreeInstantiation() {
+        var dao = BytecodeMocks.mockClass(ComplexDao.class);
+        Mocks.when(() -> dao.fetchData()).thenReturn("mocked");
+        expect(dao.fetchData()).isEqualTo("mocked");
+    }
+
+    public static class ComplexDao {
+        private final String connectionString;
+
+        public ComplexDao(String connectionString) {
+            if (connectionString == null || connectionString.isBlank()) {
+                throw new IllegalArgumentException("Connection string cannot be empty");
+            }
+            this.connectionString = connectionString;
+        }
+
+        public String fetchData() {
+            return "real data from " + connectionString;
+        }
+    }
+
     public static class Calculator {
         public int add(int a, int b) {
             return a + b;

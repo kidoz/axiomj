@@ -9,6 +9,7 @@ public record RunConfig(
         Path jsonReport,
         Path markdownReport,
         Path allureResultsDir,
+        Path junitXmlReport,
         long seed,
         int parallelism,
         boolean sequential,
@@ -36,6 +37,7 @@ public record RunConfig(
         Path json = null;
         Path markdown = null;
         Path allure = null;
+        Path junitXml = null;
         long seed = System.nanoTime();
         int parallelism = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 8));
         boolean sequential = false;
@@ -53,11 +55,13 @@ public record RunConfig(
                 allure = Path.of(arg.substring("--allure-results=".length()));
             } else if (arg.startsWith("--allure=")) {
                 allure = Path.of(arg.substring("--allure=".length()));
+            } else if (arg.startsWith("--junit-xml=")) {
+                junitXml = Path.of(arg.substring("--junit-xml=".length()));
             } else if (arg.startsWith("--report=")) {
                 String spec = arg.substring("--report=".length());
                 int separator = spec.indexOf(':');
                 if (separator <= 0 || separator == spec.length() - 1) {
-                    throw new IllegalArgumentException("Expected --report=<json|markdown|md|allure>:<path>");
+                    throw new IllegalArgumentException("Expected --report=<json|markdown|md|allure|junit-xml>:<path>");
                 }
                 String type = spec.substring(0, separator).trim().toLowerCase();
                 Path path = Path.of(spec.substring(separator + 1));
@@ -65,6 +69,7 @@ public record RunConfig(
                     case "json" -> json = path;
                     case "markdown", "md" -> markdown = path;
                     case "allure" -> allure = path;
+                    case "junit-xml" -> junitXml = path;
                     default -> throw new IllegalArgumentException("Unsupported report type: " + type);
                 }
             } else if (arg.startsWith("--seed=")) {
@@ -115,6 +120,7 @@ public record RunConfig(
                 json,
                 markdown,
                 allure,
+                junitXml,
                 seed,
                 parallelism,
                 sequential,

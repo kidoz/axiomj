@@ -47,6 +47,9 @@ public final class TestRunner {
     // the reported sample is, never correctness.
     private static final int MAX_SHRINK_TRIALS = 200;
 
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.locks.ReentrantLock>
+            RESOURCE_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+
     private final PrintStream out;
 
     // Per-class root container, set while a class runs (classes are processed sequentially in run()).
@@ -110,6 +113,9 @@ public final class TestRunner {
         }
         if (config.markdownReport() != null) {
             write(config.markdownReport(), MarkdownReport.render(results, summary, config));
+        }
+        if (config.junitXmlReport() != null) {
+            write(config.junitXmlReport(), JunitXmlReport.render(results, summary));
         }
         if (config.allureResultsDir() != null) {
             AllureReport.write(config.allureResultsDir(), results);
@@ -352,10 +358,45 @@ public final class TestRunner {
 
     private TestResult executeMethod(
             Class<?> testClass, TestPlan plan, Method method, long runSeed, FailureCorpus corpus) {
-        if (method.isAnnotationPresent(Property.class)) {
-            return runProperty(testClass, plan, method, runSeed, corpus);
+        var retryAnnotation = method.getAnnotation(Retry.class);
+        if (retryAnnotation == null) {
+            retryAnnotation = testClass.getAnnotation(Retry.class);
         }
-        return runFact(testClass, plan, method, runSeed);
+        int maxAttempts = retryAnnotation != null ? Math.max(1, retryAnnotation.maxAttempts()) : 1;
+
+        var lockAnnotation = method.getAnnotation(ResourceLock.class);
+        if (lockAnnotation == null) {
+            lockAnnotation = testClass.getAnnotation(ResourceLock.class);
+        }
+
+        java.util.concurrent.locks.ReentrantLock lock = null;
+        if (lockAnnotation != null) {
+            lock = RESOURCE_LOCKS.computeIfAbsent(
+                    lockAnnotation.value(), k -> new java.util.concurrent.locks.ReentrantLock());
+        }
+
+        TestResult lastResult = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (lock != null) {
+                lock.lock();
+            }
+            try {
+                if (method.isAnnotationPresent(Property.class)) {
+                    lastResult = runProperty(testClass, plan, method, runSeed, corpus);
+                } else {
+                    lastResult = runFact(testClass, plan, method, runSeed);
+                }
+
+                if (lastResult.passed() || lastResult.skipped()) {
+                    return lastResult; // Success or skipped, don't retry
+                }
+            } finally {
+                if (lock != null) {
+                    lock.unlock();
+                }
+            }
+        }
+        return lastResult; // All attempts failed
     }
 
     private TestResult runFact(Class<?> testClass, TestPlan plan, Method method, long runSeed) {

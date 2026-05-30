@@ -1,6 +1,5 @@
 package su.kidoz.axiomj.mock.bytecode;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Modifier;
 import net.bytebuddy.ByteBuddy;
@@ -56,16 +55,11 @@ public final class BytecodeMocks {
 
     private static <T> T instantiate(Class<? extends T> subclass, Class<T> type) {
         try {
-            Constructor<? extends T> constructor = subclass.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            return constructor.newInstance();
-        } catch (NoSuchMethodException e) {
-            throw new IllegalArgumentException(
-                    "Class mock requires an accessible no-argument constructor on " + type.getName()
-                            + " (constructor-free instantiation is a planned follow-up)",
-                    e);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Could not create class mock for " + type.getName(), e);
+            org.objenesis.Objenesis objenesis = new org.objenesis.ObjenesisStd();
+            return objenesis.newInstance(subclass);
+        } catch (Throwable e) {
+            throw new IllegalStateException(
+                    "Could not create class mock for " + type.getName() + " using Objenesis", e);
         }
     }
 

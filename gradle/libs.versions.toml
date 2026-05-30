@@ -1,9 +1,11 @@
 [versions]
 palantir = "2.90.0"
 byteBuddy = "1.15.11"
+objenesis = "3.4"
 
 [libraries]
 byte-buddy = { module = "net.bytebuddy:byte-buddy", version.ref = "byteBuddy" }
+objenesis = { module = "org.objenesis:objenesis", version.ref = "objenesis" }
 
 [plugins]
 spotless = { id = "com.diffplug.spotless", version = "8.5.1" }

@@ -21,6 +21,7 @@ public final class Main {
                 config.jsonReport(),
                 config.markdownReport(),
                 config.allureResultsDir(),
+                config.junitXmlReport(),
                 config.seed(),
                 config.parallelism(),
                 config.sequential(),
@@ -51,7 +52,8 @@ public final class Main {
         System.out.println("  --json=path          Write AI-readable JSON report");
         System.out.println("  --markdown=path      Write AI-readable Markdown report");
         System.out.println("  --allure-results=dir Write Allure-compatible result files to dir");
-        System.out.println("  --report=type:path   Generic report syntax: json, markdown/md, or allure");
+        System.out.println("  --junit-xml=path     Write JUnit XML report");
+        System.out.println("  --report=type:path   Generic report syntax: json, markdown/md, allure, or junit-xml");
         System.out.println("  --seed=long          Set run seed for generated properties");
         System.out.println("  --parallelism=N      Run independent tests concurrently with N virtual workers");
         System.out.println("  --sequential         Alias for --parallelism=1");
