@@ -1,3 +1,5 @@
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     id("su.kidoz.axiomj")
 }
@@ -29,6 +31,64 @@ tasks.named("axiomjTest", su.kidoz.axiomj.plugin.AxiomJTestTask::class.java) {
 // Run the bundled example suite as part of the build gate (`check`/`build`/CI).
 tasks.named("check") {
     dependsOn("axiomjTest")
+}
+
+// ---- Whole-framework JaCoCo coverage from the example run --------------------------------------
+// The example suite exercises every framework module. AxiomJ runs it in a forked JVM via the plugin
+// task, so the JaCoCo agent is passed through the task's jvmArgs (the agent dumps on JVM exit), and
+// a single report aggregates the coverage against every module's main sources.
+
+val coverageExec = layout.buildDirectory.file("jacoco/axiomjTest.exec")
+val jacocoAgentJar = layout.buildDirectory.file("tmp/jacoco/jacocoagent.jar")
+
+val extractJacocoAgent =
+    tasks.register<Copy>("extractJacocoAgent") {
+        from({ zipTree(configurations["jacocoAgent"].singleFile) })
+        include("jacocoagent.jar")
+        into(layout.buildDirectory.dir("tmp/jacoco"))
+    }
+
+tasks.named("axiomjTest", su.kidoz.axiomj.plugin.AxiomJTestTask::class.java) {
+    dependsOn(extractJacocoAgent)
+    // JaCoCo cannot coexist with class-redefinition mocking (static/constructor): if it has already
+    // instrumented a class, Byte Buddy's redefinition no longer installs the mock. The redefined
+    // targets are all test fixtures in `examples.*`, which the report does not include anyway, so we
+    // exclude that package from instrumentation — framework classes (su.kidoz.axiomj.*) are still covered.
+    jvmArgs.add(
+        provider {
+            val agent = jacocoAgentJar.get().asFile.absolutePath
+            val dest = coverageExec.get().asFile.absolutePath
+            "-javaagent:$agent=destfile=$dest,dumponexit=true,excludes=examples.*"
+        },
+    )
+}
+
+val frameworkModules =
+    listOf(
+        "axiomj-api",
+        "axiomj-assertions",
+        "axiomj-di",
+        "axiomj-mock-core",
+        "axiomj-mock-bytecode",
+        "axiomj-property",
+        "axiomj-engine",
+    )
+frameworkModules.forEach { evaluationDependsOn(":$it") }
+
+tasks.register<JacocoReport>("jacocoExamplesReport") {
+    group = "verification"
+    description = "Aggregated JaCoCo coverage across all framework modules, from the example test run."
+    dependsOn("axiomjTest")
+    executionData(coverageExec)
+    frameworkModules.forEach { name ->
+        val main = project(":$name").extensions.getByType(SourceSetContainer::class.java).getByName("main")
+        sourceDirectories.from(main.allJava.srcDirs)
+        classDirectories.from(main.output.classesDirs)
+    }
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
 
 // keep runExamples for backward compatibility in the scripts for now

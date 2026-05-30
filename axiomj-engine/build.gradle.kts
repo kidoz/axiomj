@@ -1,3 +1,6 @@
+import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 dependencies {
     api(project(":axiomj-api"))
     api(project(":axiomj-di"))
@@ -28,4 +31,20 @@ val runEngineTests =
 // Make the engine's own tests part of the build gate (`check`/`build`/CI), not just a manual task.
 tasks.named("check") {
     dependsOn(runEngineTests)
+}
+
+// JaCoCo coverage for the engine self-tests. AxiomJ's runner forks a JVM and calls System.exit,
+// so the agent is attached to that fork (applyTo) and dumps on JVM shutdown.
+the<JacocoPluginExtension>().applyTo(runEngineTests.get())
+
+tasks.register<JacocoReport>("jacocoEngineReport") {
+    group = "verification"
+    description = "Generates a JaCoCo coverage report from the engine self-tests."
+    dependsOn(runEngineTests)
+    executionData(runEngineTests.get())
+    sourceSets(sourceSets["main"])
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
