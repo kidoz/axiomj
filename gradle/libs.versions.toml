@@ -2,11 +2,14 @@
 palantir = "2.90.0"
 byteBuddy = "1.15.11"
 objenesis = "3.4"
+errorProne = "2.36.0"
 
 [libraries]
 byte-buddy = { module = "net.bytebuddy:byte-buddy", version.ref = "byteBuddy" }
 byte-buddy-agent = { module = "net.bytebuddy:byte-buddy-agent", version.ref = "byteBuddy" }
 objenesis = { module = "org.objenesis:objenesis", version.ref = "objenesis" }
+errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorProne" }
 
 [plugins]
 spotless = { id = "com.diffplug.spotless", version = "8.5.1" }
+errorprone = { id = "net.ltgt.errorprone", version = "4.1.0" }

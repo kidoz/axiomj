@@ -16,6 +16,7 @@ import java.util.function.Predicate;
  * <p>Within a single mocked call you must use matchers for either all arguments or none. When any matcher is used, wrap
  * literal values with {@link #eq(Object)}.
  */
+@SuppressWarnings("TypeParameterUnusedInFormals")
 public final class Arg {
     private Arg() {}
 

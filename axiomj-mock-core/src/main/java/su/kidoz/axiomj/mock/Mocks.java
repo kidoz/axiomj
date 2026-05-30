@@ -151,6 +151,7 @@ public final class Mocks {
         }
     }
 
+    @SuppressWarnings("ReturnValueIgnored")
     public static <T> OngoingStubbing<T> when(Supplier<T> call) {
         return new OngoingStubbing<>(captureStub(call::get));
     }
@@ -168,7 +169,7 @@ public final class Mocks {
     }
 
     public static <T> Verification verify(Supplier<T> call) {
-        var capture = capture(CaptureKind.VERIFY, call::get);
+        var capture = capture(CaptureKind.VERIFY, call);
         return new Verification(capture.controller(), capture.matched());
     }
 
@@ -232,6 +233,7 @@ public final class Mocks {
         return capture.controller().newRule(capture.matched());
     }
 
+    @SuppressWarnings("ReturnValueIgnored")
     private static Capture capture(CaptureKind kind, Supplier<?> call) {
         var mode = new CaptureMode(kind);
         ScopedValue.where(CAPTURE_MODE, mode)
@@ -397,7 +399,7 @@ public final class Mocks {
         }
 
         public <T> InOrder verify(Supplier<T> call) {
-            return verifyCapture(capture(CaptureKind.VERIFY, call::get));
+            return verifyCapture(capture(CaptureKind.VERIFY, call));
         }
 
         private InOrder verifyCapture(Capture capture) {
@@ -650,6 +652,7 @@ public final class Mocks {
         }
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     private static Object defaultValue(Class<?> returnType) {
         if (returnType == void.class) return null;
         if (!returnType.isPrimitive()) {

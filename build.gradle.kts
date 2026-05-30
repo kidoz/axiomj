@@ -3,6 +3,7 @@ import com.diffplug.gradle.spotless.SpotlessExtension
 plugins {
     `java-library`
     alias(libs.plugins.spotless)
+    alias(libs.plugins.errorprone) apply false
 }
 
 spotless {
@@ -16,9 +17,14 @@ spotless {
 subprojects {
     apply(plugin = "java-library")
     apply(plugin = "com.diffplug.spotless")
+    apply(plugin = "net.ltgt.errorprone")
 
     group = "su.kidoz.axiomj"
     version = "0.1.0"
+
+    dependencies {
+        "errorprone"(rootProject.libs.errorprone.core)
+    }
 
     java {
         toolchain {
