@@ -234,7 +234,7 @@ public final class SimpleContainer implements Binder {
         try {
             @SuppressWarnings("unchecked")
             var constructors = (Constructor<T>[]) type.getDeclaredConstructors();
-            Constructor<T> selected = Arrays.stream(constructors)
+            var selected = Arrays.stream(constructors)
                     .filter(c -> c.isAnnotationPresent(Inject.class))
                     .findFirst()
                     .orElseGet(() -> Arrays.stream(constructors)

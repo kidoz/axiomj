@@ -24,12 +24,12 @@ public final class FailureCorpus {
             return;
         }
         try {
-            List<String> lines = Files.readAllLines(CORPUS_PATH);
-            for (String line : lines) {
+            var lines = Files.readAllLines(CORPUS_PATH);
+            for (var line : lines) {
                 if (line.isBlank() || line.startsWith("#")) continue;
-                String[] parts = line.split("=", 2);
+                var parts = line.split("=", 2);
                 if (parts.length == 2) {
-                    String methodId = parts[0].trim();
+                    var methodId = parts[0].trim();
                     try {
                         long seed = Long.parseLong(parts[1].trim());
                         failingSeeds
@@ -50,7 +50,7 @@ public final class FailureCorpus {
     }
 
     public void removePass(String methodId, long seed) {
-        Set<Long> seeds = failingSeeds.get(methodId);
+        var seeds = failingSeeds.get(methodId);
         if (seeds != null) {
             seeds.remove(seed);
             if (seeds.isEmpty()) {
@@ -60,17 +60,17 @@ public final class FailureCorpus {
     }
 
     public List<Long> getSeeds(String methodId) {
-        Set<Long> seeds = failingSeeds.get(methodId);
+        var seeds = failingSeeds.get(methodId);
         return seeds == null ? List.of() : new ArrayList<>(seeds);
     }
 
     public void save() {
         try {
-            List<String> lines = new ArrayList<>();
+            var lines = new ArrayList<String>();
             lines.add("# AxiomJ property testing failure corpus");
             lines.add("# Automatically generated. Do not edit manually unless you know what you are doing.");
-            for (Map.Entry<String, Set<Long>> entry : failingSeeds.entrySet()) {
-                for (Long seed : entry.getValue()) {
+            for (var entry : failingSeeds.entrySet()) {
+                for (var seed : entry.getValue()) {
                     lines.add(entry.getKey() + "=" + seed);
                 }
             }

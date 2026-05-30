@@ -54,8 +54,8 @@ public final class Config {
                     .toArray(Class<?>[]::new);
             var args = new Object[components.length];
             for (int i = 0; i < components.length; i++) {
-                String propKey = keyPrefix + "." + components[i].getName();
-                Class<?> type = types[i];
+                var propKey = keyPrefix + "." + components[i].getName();
+                var type = types[i];
                 if (type == String.class) args[i] = get(propKey);
                 else if (type == int.class || type == Integer.class) args[i] = getInt(propKey);
                 else if (type == long.class || type == Long.class) args[i] = getLong(propKey);

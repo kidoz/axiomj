@@ -113,7 +113,7 @@ public final class Expect {
                     "Expected to complete within %d ms but did not finish".formatted(budget.toMillis())));
             return;
         }
-        Throwable failure = thrown.get();
+        var failure = thrown.get();
         if (failure != null) {
             collect(new AssertionFailed(
                     "Expected to complete within %d ms but threw %s"

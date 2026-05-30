@@ -34,14 +34,14 @@ public final class StateMachine<M, S> {
     @SafeVarargs
     public static <M, S> Arbitrary<List<Action<M, S>>> sequence(
             int minLength, int maxLength, Arbitrary<Action<M, S>>... actions) {
-        return new Arbitrary<List<Action<M, S>>>() {
+        return new Arbitrary<>() {
             @Override
             public List<Action<M, S>> generate(GenerationContext context) {
                 if (actions.length == 0) return List.of();
                 int length = context.random().nextInt(minLength, maxLength + 1);
-                List<Action<M, S>> sequence = new ArrayList<>(length);
+                var sequence = new ArrayList<Action<M, S>>(length);
                 for (int i = 0; i < length; i++) {
-                    Arbitrary<Action<M, S>> generator = actions[context.random().nextInt(actions.length)];
+                    var generator = actions[context.random().nextInt(actions.length)];
                     sequence.add(generator.generate(context));
                 }
                 return sequence;

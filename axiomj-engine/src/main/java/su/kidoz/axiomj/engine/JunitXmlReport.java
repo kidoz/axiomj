@@ -16,8 +16,8 @@ public final class JunitXmlReport {
         var testsByClass = results.stream().collect(java.util.stream.Collectors.groupingBy(TestResult::className));
 
         for (var entry : testsByClass.entrySet()) {
-            String className = entry.getKey();
-            List<TestResult> classResults = entry.getValue();
+            var className = entry.getKey();
+            var classResults = entry.getValue();
 
             int classTotal = classResults.size();
             int classFailures =
@@ -31,7 +31,7 @@ public final class JunitXmlReport {
                     "  <testsuite name=\"%s\" time=\"%.3f\" tests=\"%d\" failures=\"%d\" skipped=\"%d\">\n",
                     escape(className), classTime, classTotal, classFailures, classSkipped));
 
-            for (TestResult result : classResults) {
+            for (var result : classResults) {
                 double time = result.durationMillis() / 1000.0;
                 builder.append(String.format(
                         "    <testcase classname=\"%s\" name=\"%s\" time=\"%.3f\">\n",
@@ -40,9 +40,9 @@ public final class JunitXmlReport {
                 if (result.skipped()) {
                     builder.append(String.format("      <skipped message=\"%s\" />\n", escape(result.skipReason())));
                 } else if (result.failed()) {
-                    Throwable error = result.error();
-                    String type = error != null ? escape(error.getClass().getName()) : "Unknown";
-                    String message = error != null && error.getMessage() != null ? escape(error.getMessage()) : "";
+                    var error = result.error();
+                    var type = error != null ? escape(error.getClass().getName()) : "Unknown";
+                    var message = error != null && error.getMessage() != null ? escape(error.getMessage()) : "";
                     builder.append(String.format("      <failure type=\"%s\" message=\"%s\">\n", type, message));
                     if (error != null) {
                         builder.append("<![CDATA[\n");
@@ -52,7 +52,7 @@ public final class JunitXmlReport {
                     builder.append("      </failure>\n");
                 }
 
-                Object log = result.metadata().get("log");
+                var log = result.metadata().get("log");
                 if (log != null && !log.toString().isBlank()) {
                     builder.append("      <system-out><![CDATA[\n");
                     builder.append(cdata(log.toString()));

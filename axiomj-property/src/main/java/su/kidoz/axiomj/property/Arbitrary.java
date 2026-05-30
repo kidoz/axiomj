@@ -14,7 +14,7 @@ public interface Arbitrary<T> {
 
     default <U> Arbitrary<U> map(Function<T, U> mapper) {
         var self = this;
-        return new Arbitrary<U>() {
+        return new Arbitrary<>() {
             @Override
             public U generate(GenerationContext context) {
                 return mapper.apply(self.generate(context));
@@ -24,7 +24,7 @@ public interface Arbitrary<T> {
 
     default Arbitrary<T> filter(Predicate<T> predicate) {
         var self = this;
-        return new Arbitrary<T>() {
+        return new Arbitrary<>() {
             @Override
             public T generate(GenerationContext context) {
                 for (int i = 0; i < 1000; i++) {
@@ -46,10 +46,10 @@ public interface Arbitrary<T> {
 
     default <U> Arbitrary<U> flatMap(Function<T, Arbitrary<U>> mapper) {
         var self = this;
-        return new Arbitrary<U>() {
+        return new Arbitrary<>() {
             @Override
             public U generate(GenerationContext context) {
-                T inner = self.generate(context);
+                var inner = self.generate(context);
                 return mapper.apply(inner).generate(context);
             }
         };

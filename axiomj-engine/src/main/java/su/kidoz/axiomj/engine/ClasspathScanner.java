@@ -2,11 +2,8 @@ package su.kidoz.axiomj.engine;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
-import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import su.kidoz.axiomj.api.Fact;
 import su.kidoz.axiomj.api.Property;
@@ -16,12 +13,12 @@ public final class ClasspathScanner {
     private ClasspathScanner() {}
 
     public static List<String> scan(RunConfig config) {
-        List<String> discoveredClasses = new ArrayList<>();
-        String classpath = System.getProperty("java.class.path");
-        String[] paths = classpath.split(File.pathSeparator);
+        var discoveredClasses = new ArrayList<String>();
+        var classpath = System.getProperty("java.class.path");
+        var paths = classpath.split(File.pathSeparator);
 
-        for (String path : paths) {
-            File file = new File(path);
+        for (var path : paths) {
+            var file = new File(path);
             if (!file.exists()) continue;
 
             if (file.isDirectory()) {
@@ -35,14 +32,14 @@ public final class ClasspathScanner {
     }
 
     private static void scanDirectory(File root, File dir, RunConfig config, List<String> discoveredClasses) {
-        File[] files = dir.listFiles();
+        var files = dir.listFiles();
         if (files == null) return;
 
-        for (File file : files) {
+        for (var file : files) {
             if (file.isDirectory()) {
                 scanDirectory(root, file, config, discoveredClasses);
             } else if (file.getName().endsWith(".class")) {
-                String className = getClassName(root, file);
+                var className = getClassName(root, file);
                 if (shouldInclude(className, config)) {
                     inspectClass(className, discoveredClasses);
                 }
@@ -51,12 +48,12 @@ public final class ClasspathScanner {
     }
 
     private static void scanJar(File jar, RunConfig config, List<String> discoveredClasses) {
-        try (JarFile jarFile = new JarFile(jar)) {
-            Enumeration<JarEntry> entries = jarFile.entries();
+        try (var jarFile = new JarFile(jar)) {
+            var entries = jarFile.entries();
             while (entries.hasMoreElements()) {
-                JarEntry entry = entries.nextElement();
+                var entry = entries.nextElement();
                 if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
-                    String className = entry.getName()
+                    var className = entry.getName()
                             .replace('/', '.')
                             .substring(0, entry.getName().length() - 6);
                     if (shouldInclude(className, config)) {
@@ -70,9 +67,9 @@ public final class ClasspathScanner {
     }
 
     private static String getClassName(File root, File classFile) {
-        String rootPath = root.getAbsolutePath();
-        String classPath = classFile.getAbsolutePath();
-        String relativePath = classPath.substring(rootPath.length() + 1);
+        var rootPath = root.getAbsolutePath();
+        var classPath = classFile.getAbsolutePath();
+        var relativePath = classPath.substring(rootPath.length() + 1);
         return relativePath.replace(File.separatorChar, '.').substring(0, relativePath.length() - 6);
     }
 
@@ -83,7 +80,7 @@ public final class ClasspathScanner {
         }
 
         boolean included = config.includePackages().isEmpty();
-        for (String pkg : config.includePackages()) {
+        for (var pkg : config.includePackages()) {
             if (className.startsWith(pkg + ".") || className.equals(pkg)) {
                 included = true;
                 break;
@@ -92,7 +89,7 @@ public final class ClasspathScanner {
 
         if (!included) return false;
 
-        for (String pkg : config.excludePackages()) {
+        for (var pkg : config.excludePackages()) {
             if (className.startsWith(pkg + ".") || className.equals(pkg)) {
                 return false;
             }
@@ -103,13 +100,13 @@ public final class ClasspathScanner {
 
     private static void inspectClass(String className, List<String> discoveredClasses) {
         try {
-            Class<?> clazz = Class.forName(className, false, ClasspathScanner.class.getClassLoader());
+            var clazz = Class.forName(className, false, ClasspathScanner.class.getClassLoader());
             // Ignore abstract classes or interfaces for test discovery
             if (clazz.isInterface() || java.lang.reflect.Modifier.isAbstract(clazz.getModifiers())) {
                 return;
             }
 
-            for (Method method : clazz.getDeclaredMethods()) {
+            for (var method : clazz.getDeclaredMethods()) {
                 if (method.isAnnotationPresent(Fact.class) || method.isAnnotationPresent(Property.class)) {
                     discoveredClasses.add(className);
                     return;
