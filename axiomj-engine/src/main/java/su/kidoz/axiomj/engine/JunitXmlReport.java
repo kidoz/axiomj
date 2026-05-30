@@ -46,7 +46,7 @@ public final class JunitXmlReport {
                     builder.append(String.format("      <failure type=\"%s\" message=\"%s\">\n", type, message));
                     if (error != null) {
                         builder.append("<![CDATA[\n");
-                        builder.append(errorToString(error));
+                        builder.append(cdata(stackTrace(error)));
                         builder.append("]]>\n");
                     }
                     builder.append("      </failure>\n");
@@ -55,7 +55,7 @@ public final class JunitXmlReport {
                 Object log = result.metadata().get("log");
                 if (log != null && !log.toString().isBlank()) {
                     builder.append("      <system-out><![CDATA[\n");
-                    builder.append(log.toString());
+                    builder.append(cdata(log.toString()));
                     builder.append("\n]]></system-out>\n");
                 }
 
@@ -70,16 +70,37 @@ public final class JunitXmlReport {
 
     private static String escape(String s) {
         if (s == null) return "";
-        return s.replace("&", "&amp;")
+        return stripInvalidXml(s)
+                .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&apos;");
     }
 
-    private static String errorToString(Throwable t) {
+    // Makes text safe to embed in a CDATA section: drops characters XML 1.0 forbids (which are
+    // illegal even inside CDATA) and splits any "]]>" so it cannot terminate the section early.
+    private static String cdata(String s) {
+        if (s == null) return "";
+        return stripInvalidXml(s).replace("]]>", "]]]]><![CDATA[>");
+    }
+
+    // Removes characters that are not legal in an XML 1.0 document. Tab, newline and carriage
+    // return are kept; surrogate code units are kept so supplementary characters survive.
+    private static String stripInvalidXml(String s) {
+        var sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\t' || c == '\n' || c == '\r' || (c >= 0x20 && c <= 0xFFFD)) {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String stackTrace(Throwable t) {
         var sw = new java.io.StringWriter();
         t.printStackTrace(new java.io.PrintWriter(sw));
-        return sw.toString().replace("]]>", "]]]]><![CDATA[>");
+        return sw.toString();
     }
 }

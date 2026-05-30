@@ -61,7 +61,9 @@ public final class SarifReport {
             builder.append("            {\n");
             builder.append("              \"physicalLocation\": {\n");
             builder.append("                \"artifactLocation\": {\n");
-            builder.append("                  \"uri\": \"").append(fileUri).append("\",\n");
+            builder.append("                  \"uri\": \"")
+                    .append(escapeJson(fileUri))
+                    .append("\",\n");
             builder.append("                  \"uriBaseId\": \"%SRCROOT%\"\n");
             builder.append("                },\n");
             builder.append("                \"region\": {\n");
@@ -83,12 +85,23 @@ public final class SarifReport {
 
     private static String escapeJson(String s) {
         if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\b", "\\b")
-                .replace("\f", "\\f")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        var sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\b' -> sb.append("\\b");
+                case '\f' -> sb.append("\\f");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) sb.append("\\u%04x".formatted((int) c));
+                    else sb.append(c);
+                }
+            }
+        }
+        return sb.toString();
     }
 }
