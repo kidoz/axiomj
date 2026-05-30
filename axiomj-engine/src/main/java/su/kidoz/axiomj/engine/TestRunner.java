@@ -42,6 +42,11 @@ import su.kidoz.axiomj.property.GenerationContext;
 import su.kidoz.axiomj.property.Shrinker;
 
 public final class TestRunner {
+    // Upper bound on shrink trials per failing property, to keep shrinking (each trial re-runs the full
+    // per-test lifecycle) cheap and bounded. Shrinking is best-effort, so capping only affects how minimal
+    // the reported sample is, never correctness.
+    private static final int MAX_SHRINK_TRIALS = 200;
+
     private final PrintStream out;
 
     // Per-class root container, set while a class runs (classes are processed sequentially in run()).
@@ -412,14 +417,18 @@ public final class TestRunner {
         var current = failing.clone();
         var types = method.getParameterTypes();
         var annotations = method.getParameterAnnotations();
+        int remainingTrials = MAX_SHRINK_TRIALS;
         boolean improved = true;
-        while (improved) {
+        while (improved && remainingTrials > 0) {
             improved = false;
-            for (int i = 0; i < current.length; i++) {
+            for (int i = 0; i < current.length && remainingTrials > 0; i++) {
                 if (!hasAnnotation(annotations[i], ForAll.class)) {
                     continue;
                 }
                 for (Object candidate : Shrinker.candidates(types[i], annotations[i], current[i])) {
+                    if (remainingTrials-- <= 0) {
+                        break;
+                    }
                     var trial = current.clone();
                     trial[i] = candidate;
                     try {
