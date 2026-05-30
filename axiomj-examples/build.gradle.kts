@@ -75,11 +75,7 @@ val frameworkModules =
     )
 frameworkModules.forEach { evaluationDependsOn(":$it") }
 
-tasks.register<JacocoReport>("jacocoExamplesReport") {
-    group = "verification"
-    description = "Aggregated JaCoCo coverage across all framework modules, from the example test run."
-    dependsOn("axiomjTest")
-    executionData(coverageExec)
+fun JacocoReport.aggregateFrameworkSources() {
     frameworkModules.forEach { name ->
         val main = project(":$name").extensions.getByType(SourceSetContainer::class.java).getByName("main")
         sourceDirectories.from(main.allJava.srcDirs)
@@ -89,6 +85,27 @@ tasks.register<JacocoReport>("jacocoExamplesReport") {
         xml.required.set(true)
         html.required.set(true)
     }
+}
+
+tasks.register<JacocoReport>("jacocoExamplesReport") {
+    group = "verification"
+    description = "Aggregated JaCoCo coverage across all framework modules, from the example test run."
+    dependsOn("axiomjTest")
+    executionData(coverageExec)
+    aggregateFrameworkSources()
+}
+
+// A single number for the whole project: merges the example run with the engine self-tests, since those
+// two suites write separate .exec files and neither alone reflects total coverage.
+tasks.register<JacocoReport>("jacocoMergedReport") {
+    group = "verification"
+    description = "Merged JaCoCo coverage (example run + engine self-tests) across all framework modules."
+    dependsOn("axiomjTest", ":axiomj-engine:runEngineTests")
+    executionData(
+        coverageExec,
+        project(":axiomj-engine").layout.buildDirectory.file("jacoco/runEngineTests.exec"),
+    )
+    aggregateFrameworkSources()
 }
 
 // keep runExamples for backward compatibility in the scripts for now
