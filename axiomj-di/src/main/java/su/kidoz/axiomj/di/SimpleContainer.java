@@ -188,19 +188,24 @@ public final class SimpleContainer implements Binder {
             }
             case SHARED, SINGLETON -> {
                 var root = root();
+                Object instance;
                 synchronized (root) {
                     if (root.instances.containsKey(key)) {
-                        yield root.instances.get(key);
+                        instance = root.instances.get(key);
+                    } else {
+                        instance = created(root, binding.provider.get());
+                        root.instances.put(key, instance);
                     }
-                    var instance = created(root, binding.provider.get());
-                    root.instances.put(key, instance);
-                    yield instance;
                 }
+                if (this != root) {
+                    this.instances.put(key, instance);
+                }
+                yield instance;
             }
         };
     }
 
-    private Object autoMock(Class<?> type) {
+    private synchronized Object autoMock(Class<?> type) {
         var existing = autoMocks.get(type);
         if (existing != null) {
             return existing;
