@@ -221,6 +221,8 @@ report formats under `build/`.
 - Formatting is enforced by **Spotless** (palantir-java-format, 120 columns). `spotlessCheck`
   is wired into `check`, so `./gradlew build` fails on unformatted code — run `just fmt`
   before committing.
+- Static analysis is enforced by **Error Prone** during `compileJava`; build fails on its
+  errors. Suppress genuine false positives narrowly with `@SuppressWarnings("CheckName")`.
 - The test suites are wired into `check`: `./gradlew build` runs the engine self-tests
   (`:axiomj-engine:runEngineTests`) and the example suite (`:axiomj-examples:axiomjTest`), so
   a test failure fails the build.
