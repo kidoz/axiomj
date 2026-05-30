@@ -62,9 +62,11 @@ public final class StaticMocks {
                 throws Throwable {
 
             InvocationHandler handler = STATIC_HANDLERS.get(clazz);
-            System.err.println("Intercepted: " + clazz + " " + methodId + " handler=" + handler);
             if (handler != null) {
-                // Find the method by iterating over declared methods (slow but this is a prototype)
+                // Resolve the intercepted method. Prefer the exact descriptor; fall back to matching by
+                // name and argument count so overloads are not confused (a substring match could bind to
+                // the wrong method). If the fallback is still ambiguous, run the real method instead of
+                // guessing.
                 Method targetMethod = null;
                 for (Method m : clazz.getDeclaredMethods()) {
                     if (m.toString().equals(methodId) || m.toGenericString().equals(methodId)) {
@@ -73,10 +75,14 @@ public final class StaticMocks {
                     }
                 }
                 if (targetMethod == null) {
+                    int argCount = args == null ? 0 : args.length;
                     for (Method m : clazz.getDeclaredMethods()) {
-                        if (methodId.contains(m.getName())) {
+                        if (m.getParameterCount() == argCount && methodId.contains("." + m.getName() + "(")) {
+                            if (targetMethod != null) {
+                                targetMethod = null; // ambiguous: more than one candidate
+                                break;
+                            }
                             targetMethod = m;
-                            break;
                         }
                     }
                 }
