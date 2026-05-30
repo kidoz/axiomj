@@ -12,9 +12,10 @@ coherent toolkit under the package root `su.kidoz.axiomj`.
 ## Highlights
 
 - **Facts, properties, and stateful testing** — example-based `@Fact` tests, generative
-  `@Property` tests, and model-based `StateMachine` testing with shrinking, reproducible
-  seeds, composable `Arbitrary<T>` generators, built-in Collection support, and
-  `.axiomj-corpus` failure replay.
+  `@Property` tests, and model-based `StateMachine` testing with shrinking and reproducible
+  seeds. Built-in generators cover primitives, strings, enums, records, and collections;
+  custom `Arbitrary<T>` generators (with their own shrinking) plug in via `@ForAll(gen = …)`,
+  and `.axiomj-corpus` replays failing seeds.
 - **Fluent assertions** — `Expect.expect(...)` for scalars, strings, collections, maps and
   optionals, soft (aggregated) assertions, deep structural equivalence, and contextual
   `as(...)` messages.
@@ -30,8 +31,8 @@ coherent toolkit under the package root `su.kidoz.axiomj`.
 - **Feature grouping** — first-class `@ProductArea`, `@Feature`, `@Scenario`, `@Requirement`,
   and `@Owner` metadata, independent of package structure.
 - **Concurrency and sequencing** — independent tests run concurrently on virtual threads;
-  `@DependsOn` / `@DependsBy` / `@DependBy` express ordering and gating, while `@ResourceLock`
-  prevents collisions on shared state. Built-in `@Retry` automatically handles flaky tests.
+  `@DependsOn` (forward) and `@DependBy` (reverse) express ordering and gating, while
+  `@ResourceLock` prevents collisions on shared state. Built-in `@Retry` handles flaky tests.
 - **Agent-friendly reports** — console, JSON, HTML, SARIF, Markdown, and JUnit XML.
 - **Robust execution** — classpath scanning, package filters, and `--fail-fast` support.
 
@@ -104,6 +105,21 @@ final class MathProperties {
 }
 ```
 
+For types the built-in generators don't cover, supply a custom `Arbitrary` via
+`@ForAll(gen = …)` — its `shrink` is used to minimize failing samples, and the same mechanism
+drives model-based testing (inject an `Arbitrary<List<Action<M,S>>>` and run a `StateMachine`):
+
+```java
+public final class Emails implements Arbitrary<String> {
+    public String generate(GenerationContext ctx) { return "user" + ctx.random().nextInt(1000) + "@example.com"; }
+}
+
+@Property
+void parsesAnyEmail(@ForAll(gen = Emails.class) String email) {
+    expect(EmailParser.parse(email)).isPresent();
+}
+```
+
 ### Dependency injection and mocking
 
 ```java
@@ -159,10 +175,11 @@ final class RegistrationFeatureTest {
 }
 ```
 
-`@DependsBy("a")` is an alias meaning “this test depends on `a`”; `@DependBy("b")` is the
-inverse: “`b` depends on this test”. Independent tests in the same layer run concurrently; a
-test runs only after its prerequisites pass, and dependents are skipped if a prerequisite
-fails or is skipped. Use `@Execution(ExecutionMode.SEQUENTIAL)` to force a class one-at-a-time.
+`@DependsOn("a")` (or `@Fact(dependsOn = "a")`) means “this test depends on `a`”; `@DependBy("b")`
+is the inverse: “`b` depends on this test”. Independent tests in the same layer run
+concurrently; a test runs only after its prerequisites pass, and dependents are skipped if a
+prerequisite fails or is skipped. Use `@Execution(ExecutionMode.SEQUENTIAL)` to force a class
+one-at-a-time.
 
 ## Modules
 
@@ -204,7 +221,11 @@ report formats under `build/`.
 - Formatting is enforced by **Spotless** (palantir-java-format, 120 columns). `spotlessCheck`
   is wired into `check`, so `./gradlew build` fails on unformatted code — run `just fmt`
   before committing.
-- CI (`.github/workflows/ci.yml`) verifies formatting and builds on every push and PR.
+- The test suites are wired into `check`: `./gradlew build` runs the engine self-tests
+  (`:axiomj-engine:runEngineTests`) and the example suite (`:axiomj-examples:axiomjTest`), so
+  a test failure fails the build.
+- CI (`.github/workflows/ci.yml`) verifies formatting, builds, and runs the suites on every
+  push and PR.
 - Durable design notes and decision records live under `.agents/contexts/`.
 
 ## Status
