@@ -11,24 +11,28 @@ coherent toolkit under the package root `su.kidoz.axiomj`.
 
 ## Highlights
 
-- **Facts and properties** — example-based `@Fact` tests and generative `@Property` tests
-  with shrinking, reproducible seeds, composable `Arbitrary<T>` generators, built-in
-  Collection support, and `.axiomj-corpus` failure replay.
+- **Facts, properties, and stateful testing** — example-based `@Fact` tests, generative
+  `@Property` tests, and model-based `StateMachine` testing with shrinking, reproducible
+  seeds, composable `Arbitrary<T>` generators, built-in Collection support, and
+  `.axiomj-corpus` failure replay.
 - **Fluent assertions** — `Expect.expect(...)` for scalars, strings, collections, maps and
   optionals, soft (aggregated) assertions, deep structural equivalence, and contextual
   `as(...)` messages.
-- **Dependency injection** — constructor / field / parameter injection, test modules,
-  `PER_TEST` / `SHARED` / `TRANSIENT` lifetimes with automatic `AutoCloseable` cleanup,
-  `@AutoMock` for unbound interfaces, named bindings, multi-bindings, config coercion to
-  Java Records, conditionally loaded `@Profile` modules, and `@Inject TestLogger` support.
+- **Dependency injection & lifecycle** — constructor/field/parameter injection, test modules,
+  `PER_TEST` / `SHARED` / `TRANSIENT` lifetimes with automatic `AutoCloseable` async cleanup,
+  global `@BeforeSuite` / `@AfterSuite` hooks, `@AutoMock` for unbound interfaces, config
+  coercion to Java Records, conditionally loaded `@Profile` modules, and `@Inject TestClock`
+  and `@Inject TestLogger` support.
 - **In-box mocking** — interface mocks with argument matchers, captors, stubbing, spies,
   strict-stub detection, in-order and timed verification; optional bytecode module for
-  concrete-class mocks.
+  concrete-class mocks (instantiated constructor-free via Objenesis) and static method
+  instrumentation via a Byte Buddy Java Agent.
 - **Feature grouping** — first-class `@ProductArea`, `@Feature`, `@Scenario`, `@Requirement`,
   and `@Owner` metadata, independent of package structure.
 - **Concurrency and sequencing** — independent tests run concurrently on virtual threads;
-  `@DependsOn` / `@DependsBy` / `@DependBy` express ordering and gating.
-- **Agent-friendly reports** — console, JSON, Markdown, and Allure-compatible output.
+  `@DependsOn` / `@DependsBy` / `@DependBy` express ordering and gating, while `@ResourceLock`
+  prevents collisions on shared state. Built-in `@Retry` automatically handles flaky tests.
+- **Agent-friendly reports** — console, JSON, HTML, SARIF, Markdown, and JUnit XML.
 - **Robust execution** — classpath scanning, package filters, and `--fail-fast` support.
 
 ## Requirements
@@ -185,12 +189,14 @@ The runner writes plain console output plus optional machine-readable reports:
 --json=build/report.json
 --markdown=build/report.md
 --junit-xml=build/TEST-axiomj.xml
+--sarif=build/axiomj.sarif
+--html=build/axiomj.html
 --allure-results=build/allure-results
 ```
 
 The Markdown report is designed to be read by humans and coding agents: it includes the
 summary, per-test status, feature and scenario metadata, source-file path, dependency chain,
-property seeds/samples, and failure details. The `runExamples` Gradle task produces all four
+property seeds/samples, and failure details. The `runExamples` Gradle task produces all
 report formats under `build/`.
 
 ## Development
@@ -203,7 +209,7 @@ report formats under `build/`.
 
 ## Status
 
-AxiomJ is at version `0.1.0-SNAPSHOT` and is not yet published to a package repository; use it
+AxiomJ is at version `0.1.0` and is not yet published to a package repository; use it
 by cloning this project. The API is still evolving.
 
 ## License

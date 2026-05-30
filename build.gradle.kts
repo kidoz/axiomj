@@ -18,7 +18,7 @@ subprojects {
     apply(plugin = "com.diffplug.spotless")
 
     group = "su.kidoz.axiomj"
-    version = "0.1.0-SNAPSHOT"
+    version = "0.1.0"
 
     java {
         toolchain {
