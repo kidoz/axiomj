@@ -1,8 +1,16 @@
 package su.kidoz.axiomj.property;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.SplittableRandom;
 import su.kidoz.axiomj.api.IntRange;
 import su.kidoz.axiomj.api.LongRange;
@@ -11,7 +19,8 @@ import su.kidoz.axiomj.api.StringLength;
 public final class BuiltInGenerators {
     private BuiltInGenerators() {}
 
-    public static Object generate(Class<?> rawType, Annotation[] annotations, GenerationContext context) {
+    public static Object generate(
+            Class<?> rawType, Type genericType, Annotation[] annotations, GenerationContext context) {
         var random = context.random();
         if (rawType == int.class || rawType == Integer.class) {
             var range = find(annotations, IntRange.class);
@@ -51,6 +60,52 @@ public final class BuiltInGenerators {
             var constants = rawType.getEnumConstants();
             return constants[random.nextInt(constants.length)];
         }
+        if (rawType == List.class || rawType == Set.class) {
+            int size = random.nextInt(0, 10);
+            Class<?> elementType = Object.class;
+            Type elementGenericType = Object.class;
+            if (genericType instanceof ParameterizedType pt) {
+                elementGenericType = pt.getActualTypeArguments()[0];
+                if (elementGenericType instanceof Class<?> c) elementType = c;
+                else if (elementGenericType instanceof ParameterizedType innerPt) {
+                    elementType = (Class<?>) innerPt.getRawType();
+                }
+            }
+            if (rawType == List.class) {
+                var list = new ArrayList<>();
+                for (int i = 0; i < size; i++) {
+                    list.add(generate(elementType, elementGenericType, annotations, context));
+                }
+                return list;
+            } else {
+                var set = new HashSet<>();
+                for (int i = 0; i < size; i++) {
+                    set.add(generate(elementType, elementGenericType, annotations, context));
+                }
+                return set;
+            }
+        }
+        if (rawType == Map.class) {
+            int size = random.nextInt(0, 10);
+            Class<?> keyType = Object.class, valueType = Object.class;
+            Type keyGenericType = Object.class, valueGenericType = Object.class;
+            if (genericType instanceof ParameterizedType pt) {
+                keyGenericType = pt.getActualTypeArguments()[0];
+                valueGenericType = pt.getActualTypeArguments()[1];
+                if (keyGenericType instanceof Class<?> c) keyType = c;
+                else if (keyGenericType instanceof ParameterizedType innerPt) keyType = (Class<?>) innerPt.getRawType();
+                if (valueGenericType instanceof Class<?> c) valueType = c;
+                else if (valueGenericType instanceof ParameterizedType innerPt)
+                    valueType = (Class<?>) innerPt.getRawType();
+            }
+            var map = new HashMap<>();
+            for (int i = 0; i < size; i++) {
+                map.put(
+                        generate(keyType, keyGenericType, annotations, context),
+                        generate(valueType, valueGenericType, annotations, context));
+            }
+            return map;
+        }
         if (rawType.isRecord()) {
             return generateRecord(rawType, context);
         }
@@ -64,7 +119,11 @@ public final class BuiltInGenerators {
                     Arrays.stream(components).map(RecordComponent::getType).toArray(Class<?>[]::new);
             var args = new Object[components.length];
             for (int i = 0; i < components.length; i++) {
-                args[i] = generate(components[i].getType(), components[i].getAnnotations(), context);
+                args[i] = generate(
+                        components[i].getType(),
+                        components[i].getGenericType(),
+                        components[i].getAnnotations(),
+                        context);
             }
             var constructor = rawType.getDeclaredConstructor(parameterTypes);
             constructor.setAccessible(true);
