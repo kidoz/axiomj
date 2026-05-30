@@ -14,7 +14,9 @@ import su.kidoz.axiomj.mock.Mocks;
 
 public final class StaticMocks {
 
+    /** Internal SPI: read by the inlined {@link StaticMockAdvice} from instrumented classes. Not a stable API. */
     public static final Map<Class<?>, InvocationHandler> STATIC_HANDLERS = new ConcurrentHashMap<>();
+
     private static final Map<Class<?>, ResettableClassFileTransformer> TRANSFORMERS = new ConcurrentHashMap<>();
     private static volatile Instrumentation instrumentation;
 
@@ -77,29 +79,7 @@ public final class StaticMocks {
 
             InvocationHandler handler = STATIC_HANDLERS.get(clazz);
             if (handler != null) {
-                // Resolve the intercepted method. Prefer the exact descriptor; fall back to matching by
-                // name and argument count so overloads are not confused (a substring match could bind to
-                // the wrong method). If the fallback is still ambiguous, run the real method instead of
-                // guessing.
-                Method targetMethod = null;
-                for (Method m : clazz.getDeclaredMethods()) {
-                    if (m.toString().equals(methodId) || m.toGenericString().equals(methodId)) {
-                        targetMethod = m;
-                        break;
-                    }
-                }
-                if (targetMethod == null) {
-                    int argCount = args == null ? 0 : args.length;
-                    for (Method m : clazz.getDeclaredMethods()) {
-                        if (m.getParameterCount() == argCount && methodId.contains("." + m.getName() + "(")) {
-                            if (targetMethod != null) {
-                                targetMethod = null; // ambiguous: more than one candidate
-                                break;
-                            }
-                            targetMethod = m;
-                        }
-                    }
-                }
+                Method targetMethod = MockMethodResolver.resolve(clazz, methodId, args);
                 if (targetMethod != null) {
                     mockedResult = handler.invoke(clazz, targetMethod, args);
                     return true; // Skip original method execution

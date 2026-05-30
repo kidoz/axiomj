@@ -14,7 +14,9 @@ import su.kidoz.axiomj.mock.Mocks;
 
 public final class ConstructorMocks {
 
+    /** Internal SPI: read by the inlined {@link ConstructorAdvice} from instrumented classes. Not a stable API. */
     public static final Map<Class<?>, Boolean> MOCKED_CONSTRUCTIONS = new ConcurrentHashMap<>();
+
     private static final Map<Class<?>, ResettableClassFileTransformer> TRANSFORMERS = new ConcurrentHashMap<>();
     private static volatile Instrumentation instrumentation;
 
@@ -35,6 +37,9 @@ public final class ConstructorMocks {
         ensureAgentInstalled();
 
         MOCKED_CONSTRUCTIONS.put(type, strict);
+        // Scoped to the current test: the redefinition is reverted when the session ends (pass or fail).
+        // The state map is process-wide, so concurrently mocking the *same* class from parallel tests races —
+        // guard such tests with @Execution(SEQUENTIAL) or @ResourceLock on the mocked class.
         Mocks.onSessionEnd(() -> unmockConstruction(type));
 
         var transformer = new AgentBuilder.Default()
@@ -85,25 +90,7 @@ public final class ConstructorMocks {
 
             InvocationHandler handler = Mocks.getHandlerIfMock(instance);
             if (handler != null) {
-                Method targetMethod = null;
-                for (Method m : clazz.getDeclaredMethods()) {
-                    if (m.toString().equals(methodId) || m.toGenericString().equals(methodId)) {
-                        targetMethod = m;
-                        break;
-                    }
-                }
-                if (targetMethod == null) {
-                    int argCount = args == null ? 0 : args.length;
-                    for (Method m : clazz.getDeclaredMethods()) {
-                        if (m.getParameterCount() == argCount && methodId.contains("." + m.getName() + "(")) {
-                            if (targetMethod != null) {
-                                targetMethod = null; // ambiguous
-                                break;
-                            }
-                            targetMethod = m;
-                        }
-                    }
-                }
+                Method targetMethod = MockMethodResolver.resolve(clazz, methodId, args);
                 if (targetMethod != null) {
                     mockedResult = handler.invoke(instance, targetMethod, args);
                     return true; // Skip original method execution
