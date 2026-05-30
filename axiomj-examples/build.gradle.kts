@@ -14,16 +14,8 @@ dependencies {
 
 val axiomjExampleClasses =
     listOf(
-        "examples.CalculatorTest",
-        "examples.UserServiceTest",
-        "examples.RecordPropertyTest",
-        "examples.FeatureWorkflowTest",
-        "examples.MockingFeaturesTest",
-        "examples.ClassMockingTest",
-        "examples.AssertionsShowcaseTest",
-        "examples.AutoMockTest",
-        "examples.SharedScopeTest",
-        "examples.DiAdvancedTest",
+        "--scan-classpath",
+        "--include-package=examples",
     )
 
 axiomj {

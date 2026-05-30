@@ -12,13 +12,15 @@ coherent toolkit under the package root `su.kidoz.axiomj`.
 ## Highlights
 
 - **Facts and properties** — example-based `@Fact` tests and generative `@Property` tests
-  with shrinking and reproducible seeds.
+  with shrinking, reproducible seeds, composable `Arbitrary<T>` generators, built-in
+  Collection support, and `.axiomj-corpus` failure replay.
 - **Fluent assertions** — `Expect.expect(...)` for scalars, strings, collections, maps and
   optionals, soft (aggregated) assertions, deep structural equivalence, and contextual
   `as(...)` messages.
 - **Dependency injection** — constructor / field / parameter injection, test modules,
   `PER_TEST` / `SHARED` / `TRANSIENT` lifetimes with automatic `AutoCloseable` cleanup,
-  `@AutoMock` for unbound interfaces, named bindings, multi-bindings, and config injection.
+  `@AutoMock` for unbound interfaces, named bindings, multi-bindings, config coercion to
+  Java Records, conditionally loaded `@Profile` modules, and `@Inject TestLogger` support.
 - **In-box mocking** — interface mocks with argument matchers, captors, stubbing, spies,
   strict-stub detection, in-order and timed verification; optional bytecode module for
   concrete-class mocks.
@@ -27,6 +29,7 @@ coherent toolkit under the package root `su.kidoz.axiomj`.
 - **Concurrency and sequencing** — independent tests run concurrently on virtual threads;
   `@DependsOn` / `@DependsBy` / `@DependBy` express ordering and gating.
 - **Agent-friendly reports** — console, JSON, Markdown, and Allure-compatible output.
+- **Robust execution** — classpath scanning, package filters, and `--fail-fast` support.
 
 ## Requirements
 

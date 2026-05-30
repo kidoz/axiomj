@@ -6,7 +6,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.PARAMETER, ElementType.RECORD_COMPONENT})
+@Target({ElementType.PARAMETER, ElementType.RECORD_COMPONENT, ElementType.TYPE_USE})
 public @interface IntRange {
     int min() default -1000;
 
