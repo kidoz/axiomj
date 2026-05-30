@@ -10,6 +10,8 @@ public record RunConfig(
         Path markdownReport,
         Path allureResultsDir,
         Path junitXmlReport,
+        Path sarifReport,
+        Path htmlReport,
         long seed,
         int parallelism,
         boolean sequential,
@@ -38,6 +40,8 @@ public record RunConfig(
         Path markdown = null;
         Path allure = null;
         Path junitXml = null;
+        Path sarif = null;
+        Path html = null;
         long seed = System.nanoTime();
         int parallelism = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 8));
         boolean sequential = false;
@@ -57,11 +61,16 @@ public record RunConfig(
                 allure = Path.of(arg.substring("--allure=".length()));
             } else if (arg.startsWith("--junit-xml=")) {
                 junitXml = Path.of(arg.substring("--junit-xml=".length()));
+            } else if (arg.startsWith("--sarif=")) {
+                sarif = Path.of(arg.substring("--sarif=".length()));
+            } else if (arg.startsWith("--html=")) {
+                html = Path.of(arg.substring("--html=".length()));
             } else if (arg.startsWith("--report=")) {
                 String spec = arg.substring("--report=".length());
                 int separator = spec.indexOf(':');
                 if (separator <= 0 || separator == spec.length() - 1) {
-                    throw new IllegalArgumentException("Expected --report=<json|markdown|md|allure|junit-xml>:<path>");
+                    throw new IllegalArgumentException(
+                            "Expected --report=<json|markdown|md|allure|junit-xml|sarif|html>:<path>");
                 }
                 String type = spec.substring(0, separator).trim().toLowerCase();
                 Path path = Path.of(spec.substring(separator + 1));
@@ -70,6 +79,8 @@ public record RunConfig(
                     case "markdown", "md" -> markdown = path;
                     case "allure" -> allure = path;
                     case "junit-xml" -> junitXml = path;
+                    case "sarif" -> sarif = path;
+                    case "html" -> html = path;
                     default -> throw new IllegalArgumentException("Unsupported report type: " + type);
                 }
             } else if (arg.startsWith("--seed=")) {
@@ -121,6 +132,8 @@ public record RunConfig(
                 markdown,
                 allure,
                 junitXml,
+                sarif,
+                html,
                 seed,
                 parallelism,
                 sequential,

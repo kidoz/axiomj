@@ -39,6 +39,8 @@ class DependencyGraphTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     0,
                     1,
                     true,
@@ -74,6 +76,8 @@ class DependencyGraphTest {
             var config = new RunConfig(
                     List.<String>of(UnknownDependencyTest.class.getName()),
                     jsonPath,
+                    null,
+                    null,
                     null,
                     null,
                     null,

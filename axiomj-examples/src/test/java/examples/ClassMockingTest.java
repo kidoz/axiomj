@@ -42,6 +42,25 @@ public final class ClassMockingTest {
         expect(dao.fetchData()).isEqualTo("mocked");
     }
 
+    @Fact(name = "mock a static method")
+    @Scenario("Instrumentation agent allows mocking static methods")
+    void mockStaticMethod() {
+        su.kidoz.axiomj.mock.bytecode.StaticMocks.mockStatic(StaticUtil.class);
+        try {
+            Mocks.when(() -> StaticUtil.hello("World")).thenReturn("Mocked World");
+            expect(StaticUtil.hello("World")).isEqualTo("Mocked World");
+            Mocks.verify(() -> StaticUtil.hello("World")).calledOnce();
+        } finally {
+            su.kidoz.axiomj.mock.bytecode.StaticMocks.unmockStatic(StaticUtil.class);
+        }
+    }
+
+    public static class StaticUtil {
+        public static String hello(String name) {
+            return "Real " + name;
+        }
+    }
+
     public static class ComplexDao {
         private final String connectionString;
 

@@ -64,13 +64,39 @@ public final class TestRunner {
         var results = new ArrayList<TestResult>();
         var threadFactory = Thread.ofVirtual().name("axiomj-test-", 0).factory();
         var corpus = new FailureCorpus();
+
+        List<Class<?>> parsedClasses = new ArrayList<>();
+        List<Method> allBeforeSuite = new ArrayList<>();
+        List<Method> allAfterSuite = new ArrayList<>();
+
+        for (String className : config.classNames()) {
+            try {
+                Class<?> testClass = Class.forName(className);
+                parsedClasses.add(testClass);
+                var plan = TestPlan.of(testClass);
+                allBeforeSuite.addAll(plan.beforeSuite());
+                allAfterSuite.addAll(plan.afterSuite());
+            } catch (Throwable error) {
+                var result = classFailureResult(className, unwrap(error));
+                results.add(result);
+                print(result);
+            }
+        }
+
+        try {
+            invokeAllStatic(allBeforeSuite);
+        } catch (Throwable error) {
+            System.err.println("Fatal: @BeforeSuite failed.");
+            error.printStackTrace();
+            System.exit(1);
+        }
+
         try (ExecutorService executor = Executors.newFixedThreadPool(config.parallelism(), threadFactory)) {
-            for (String className : config.classNames()) {
+            for (Class<?> testClass : parsedClasses) {
                 if (config.failFast() && results.stream().anyMatch(TestResult::failed)) {
                     break;
                 }
                 try {
-                    Class<?> testClass = Class.forName(className);
                     var plan = TestPlan.of(testClass);
                     var root = rootContainerFor(testClass, config.activeProfiles());
                     classRoot = root;
@@ -91,12 +117,20 @@ public final class TestRunner {
                         }
                     }
                 } catch (Throwable error) {
-                    var result = classFailureResult(className, unwrap(error));
+                    var result = classFailureResult(testClass.getName(), unwrap(error));
                     results.add(result);
                     print(result);
                 }
             }
         }
+
+        try {
+            invokeAllStatic(allAfterSuite);
+        } catch (Throwable error) {
+            System.err.println("Warning: @AfterSuite failed.");
+            error.printStackTrace();
+        }
+
         corpus.save();
 
         long duration = Duration.between(started, Instant.now()).toMillis();
@@ -116,6 +150,12 @@ public final class TestRunner {
         }
         if (config.junitXmlReport() != null) {
             write(config.junitXmlReport(), JunitXmlReport.render(results, summary));
+        }
+        if (config.sarifReport() != null) {
+            write(config.sarifReport(), SarifReport.render(results, config));
+        }
+        if (config.htmlReport() != null) {
+            write(config.htmlReport(), HtmlReport.render(results, summary, config));
         }
         if (config.allureResultsDir() != null) {
             AllureReport.write(config.allureResultsDir(), results);
@@ -600,6 +640,10 @@ public final class TestRunner {
     private SimpleContainer rootContainerFor(Class<?> testClass, List<String> activeProfiles)
             throws ReflectiveOperationException {
         var root = new SimpleContainer();
+        var testClock = new su.kidoz.axiomj.api.TestClock();
+        root.bindInstance(java.time.Clock.class, testClock);
+        root.bindInstance(su.kidoz.axiomj.api.TestClock.class, testClock);
+
         var modules = testClass.getAnnotation(UseModules.class);
         if (modules != null) {
             for (Class<? extends TestModule> moduleType : modules.value()) {
@@ -1256,17 +1300,21 @@ public final class TestRunner {
     private record TestNode(Method method, List<String> dependsOn, int order) {}
 
     private record TestPlan(
+            List<Method> beforeSuite,
             List<Method> beforeAll,
             List<Method> beforeEach,
             List<Method> tests,
             List<Method> afterEach,
-            List<Method> afterAll) {
+            List<Method> afterAll,
+            List<Method> afterSuite) {
         static TestPlan of(Class<?> testClass) {
+            var beforeSuite = new ArrayList<Method>();
             var beforeAll = new ArrayList<Method>();
             var beforeEach = new ArrayList<Method>();
             var tests = new ArrayList<Method>();
             var afterEach = new ArrayList<Method>();
             var afterAll = new ArrayList<Method>();
+            var afterSuite = new ArrayList<Method>();
             Class<?> type = testClass;
             var all = new ArrayList<Method>();
             while (type != Object.class) {
@@ -1275,19 +1323,23 @@ public final class TestRunner {
             }
             all.sort(Comparator.comparingInt(TestRunner::order).thenComparing(Method::getName));
             for (Method method : all) {
+                if (method.isAnnotationPresent(su.kidoz.axiomj.api.BeforeSuite.class)) beforeSuite.add(method);
                 if (method.isAnnotationPresent(BeforeAll.class)) beforeAll.add(method);
                 if (method.isAnnotationPresent(BeforeEach.class)) beforeEach.add(method);
                 if (method.isAnnotationPresent(Fact.class) || method.isAnnotationPresent(Property.class))
                     tests.add(method);
                 if (method.isAnnotationPresent(AfterEach.class)) afterEach.add(method);
                 if (method.isAnnotationPresent(AfterAll.class)) afterAll.add(method);
+                if (method.isAnnotationPresent(su.kidoz.axiomj.api.AfterSuite.class)) afterSuite.add(method);
             }
             return new TestPlan(
+                    List.copyOf(beforeSuite),
                     List.copyOf(beforeAll),
                     List.copyOf(beforeEach),
                     List.copyOf(tests),
                     List.copyOf(afterEach),
-                    List.copyOf(afterAll));
+                    List.copyOf(afterAll),
+                    List.copyOf(afterSuite));
         }
     }
 

@@ -37,6 +37,8 @@ tasks.register<JavaExec>("runExamples") {
         "--json=${layout.buildDirectory.file("reports/axiomj/report.json").get().asFile}",
         "--markdown=${layout.buildDirectory.file("reports/axiomj/report.md").get().asFile}",
         "--junit-xml=${layout.buildDirectory.file("reports/axiomj/TEST-axiomj.xml").get().asFile}",
+        "--sarif=${layout.buildDirectory.file("reports/axiomj/axiomj.sarif").get().asFile}",
+        "--html=${layout.buildDirectory.file("reports/axiomj/axiomj.html").get().asFile}",
         "--allure-results=${layout.buildDirectory.dir("allure-results").get().asFile}",
         *axiomjExampleClasses.toTypedArray(),
     )

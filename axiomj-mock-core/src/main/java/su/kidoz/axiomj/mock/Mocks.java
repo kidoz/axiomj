@@ -192,6 +192,7 @@ public final class Mocks {
             try {
                 call.run();
             } catch (Throwable e) {
+                e.printStackTrace();
                 throw new RuntimeException("Stub capture failed", e);
             }
             return null;

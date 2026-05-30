@@ -5,6 +5,7 @@ objenesis = "3.4"
 
 [libraries]
 byte-buddy = { module = "net.bytebuddy:byte-buddy", version.ref = "byteBuddy" }
+byte-buddy-agent = { module = "net.bytebuddy:byte-buddy-agent", version.ref = "byteBuddy" }
 objenesis = { module = "org.objenesis:objenesis", version.ref = "objenesis" }
 
 [plugins]

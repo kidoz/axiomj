@@ -246,7 +246,14 @@ public final class SimpleContainer implements Binder {
     public void close() {
         for (int i = closeables.size() - 1; i >= 0; i--) {
             try {
-                closeables.get(i).close();
+                Object closeable = closeables.get(i);
+                if (closeable instanceof AutoCloseable) {
+                    ((AutoCloseable) closeable).close();
+                } else if (closeable instanceof java.util.concurrent.Future<?> f) {
+                    // if a binding itself returns a future (like an async start), cancel it or wait.
+                    // But typically the object itself has a method.
+                    f.cancel(true);
+                }
             } catch (Exception _) {
                 // best-effort cleanup
             }

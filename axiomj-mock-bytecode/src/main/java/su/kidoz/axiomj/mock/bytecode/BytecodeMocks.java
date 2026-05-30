@@ -34,6 +34,7 @@ public final class BytecodeMocks {
 
     /** Creates a class mock; {@code strict} enables unused-stub detection like {@link Mocks#mock(Class, boolean)}. */
     public static <T> T mockClass(Class<T> type, boolean strict) {
+        System.setProperty("net.bytebuddy.experimental", "true");
         if (type.isInterface()) {
             throw new IllegalArgumentException("Use Mocks.mock(...) for interfaces: " + type.getName());
         }
