@@ -15,6 +15,10 @@ val runEngineTests =
         args(
             "su.kidoz.axiomj.engine.RunConfigTest",
             "su.kidoz.axiomj.engine.DependencyGraphTest",
+            "su.kidoz.axiomj.engine.JsonSupportTest",
+            "su.kidoz.axiomj.engine.ContainerTest",
+            "su.kidoz.axiomj.engine.ShrinkerTest",
+            "su.kidoz.axiomj.engine.JunitXmlReportTest",
         )
     }
 
