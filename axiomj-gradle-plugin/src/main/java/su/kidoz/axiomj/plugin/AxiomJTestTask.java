@@ -66,6 +66,11 @@ public abstract class AxiomJTestTask extends DefaultTask {
     @Optional
     public abstract ListProperty<String> getExtraArgs();
 
+    /** Extra JVM arguments (e.g. {@code -javaagent:...}, memory flags) passed to the test execution process. */
+    @Input
+    @Optional
+    public abstract ListProperty<String> getJvmArgs();
+
     @Inject
     protected abstract ExecOperations getExecOperations();
 
@@ -74,6 +79,10 @@ public abstract class AxiomJTestTask extends DefaultTask {
         getExecOperations().javaexec(spec -> {
             spec.setClasspath(getClasspath());
             spec.getMainClass().set("su.kidoz.axiomj.engine.Main");
+
+            if (getJvmArgs().isPresent()) {
+                spec.jvmArgs(getJvmArgs().get());
+            }
 
             var argsList = new ArrayList<String>();
             if (getParallelism().isPresent()) {
