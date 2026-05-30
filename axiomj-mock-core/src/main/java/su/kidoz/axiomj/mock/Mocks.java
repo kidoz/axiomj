@@ -225,7 +225,7 @@ public final class Mocks {
             try {
                 call.run();
             } catch (Throwable e) {
-                e.printStackTrace();
+                // The cause is carried on the wrapper and surfaced in the test result; no stderr noise.
                 throw new RuntimeException("Stub capture failed", e);
             }
             return null;
