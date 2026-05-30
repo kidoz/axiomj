@@ -557,7 +557,7 @@ public final class Mocks {
             return pushed;
         }
 
-        private StubRule newRule(MatchedInvocation matched) {
+        private synchronized StubRule newRule(MatchedInvocation matched) {
             var rule = new StubRule(matched);
             rules.add(rule);
             return rule;
