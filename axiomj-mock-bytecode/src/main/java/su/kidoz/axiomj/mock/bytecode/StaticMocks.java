@@ -38,7 +38,7 @@ public final class StaticMocks {
         new AgentBuilder.Default()
                 .disableClassFormatChanges()
                 .with(AgentBuilder.RedefinitionStrategy.REDEFINITION)
-                .with(AgentBuilder.Listener.StreamWriting.toSystemError())
+                .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
                 .type(ElementMatchers.is(type))
                 .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
                         builder.visit(Advice.to(StaticMockAdvice.class)

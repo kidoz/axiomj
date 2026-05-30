@@ -215,7 +215,22 @@ public final class SimpleContainer implements Binder {
         return mock;
     }
 
+    // Tracks the chain of types currently being constructed on this thread so a dependency cycle
+    // (A needs B needs A) fails fast with the offending path instead of overflowing the stack.
+    private static final ThreadLocal<java.util.LinkedHashSet<Class<?>>> CONSTRUCTING =
+            ThreadLocal.withInitial(java.util.LinkedHashSet::new);
+
     public <T> T construct(Class<T> type) {
+        var inProgress = CONSTRUCTING.get();
+        if (!inProgress.add(type)) {
+            var cycle = new StringBuilder();
+            for (var c : inProgress) {
+                cycle.append(c.getName()).append(" -> ");
+            }
+            cycle.append(type.getName());
+            throw new IllegalStateException("Dependency cycle detected while constructing " + type.getName() + ": "
+                    + cycle + ". Break the cycle or provide a binding in a TestModule.");
+        }
         try {
             @SuppressWarnings("unchecked")
             var constructors = (Constructor<T>[]) type.getDeclaredConstructors();
@@ -239,6 +254,8 @@ public final class SimpleContainer implements Binder {
             return instance;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Could not construct " + type.getName(), e);
+        } finally {
+            inProgress.remove(type);
         }
     }
 

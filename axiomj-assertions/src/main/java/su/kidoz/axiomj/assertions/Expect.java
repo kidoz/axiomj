@@ -78,16 +78,47 @@ public final class Expect {
         }
     }
 
-    /** Asserts that {@code action} completes within {@code budget} (and without throwing). */
+    /**
+     * Asserts that {@code action} completes within {@code budget} (and without throwing). The action runs on a separate
+     * virtual thread so a runaway action is actually bounded: if it does not finish in time it is interrupted and the
+     * assertion fails, rather than hanging the test. Any in-scope {@link #softly} collection is propagated to the
+     * worker.
+     */
     public static void completesWithin(Duration budget, ThrowingRunnable action) {
+        var soft = SOFT.isBound() ? SOFT.get() : null;
+        var thrown = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        Runnable body = () -> {
+            try {
+                action.run();
+            } catch (Throwable throwable) {
+                thrown.set(throwable);
+            }
+        };
+        Runnable scoped =
+                soft == null ? body : () -> ScopedValue.where(SOFT, soft).run(body);
+        var worker = Thread.ofVirtual().name("axiomj-completes-within").unstarted(scoped);
+
         long startNanos = System.nanoTime();
+        worker.start();
         try {
-            action.run();
-        } catch (Throwable throwable) {
+            worker.join(budget);
+        } catch (InterruptedException e) {
+            worker.interrupt();
+            Thread.currentThread().interrupt();
+            return;
+        }
+        if (worker.isAlive()) {
+            worker.interrupt();
+            collect(new AssertionFailed(
+                    "Expected to complete within %d ms but did not finish".formatted(budget.toMillis())));
+            return;
+        }
+        Throwable failure = thrown.get();
+        if (failure != null) {
             collect(new AssertionFailed(
                     "Expected to complete within %d ms but threw %s"
-                            .formatted(budget.toMillis(), throwable.getClass().getName()),
-                    throwable));
+                            .formatted(budget.toMillis(), failure.getClass().getName()),
+                    failure));
             return;
         }
         long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000;

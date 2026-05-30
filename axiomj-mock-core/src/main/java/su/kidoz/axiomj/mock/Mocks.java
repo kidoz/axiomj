@@ -146,7 +146,11 @@ public final class Mocks {
 
     /** Begins order-sensitive verification across the given mocks. */
     public static InOrder inOrder(Object... mocks) {
-        return new InOrder();
+        var controllers = new ArrayList<MockController>(mocks.length);
+        for (var mock : mocks) {
+            controllers.add(controllerOf(mock));
+        }
+        return new InOrder(controllers);
     }
 
     /** BDD alias for {@link #when}: {@code given(() -> mock.call()).willReturn(...)}. */
@@ -350,7 +354,12 @@ public final class Mocks {
     }
 
     public static final class InOrder {
+        private final List<MockController> mocks;
         private long lastSequence = -1;
+
+        private InOrder(List<MockController> mocks) {
+            this.mocks = mocks;
+        }
 
         public InOrder verify(Runnable call) {
             return verifyCapture(capture(CaptureKind.VERIFY, () -> {
@@ -364,6 +373,10 @@ public final class Mocks {
         }
 
         private InOrder verifyCapture(Capture capture) {
+            if (!mocks.isEmpty() && mocks.stream().noneMatch(m -> m == capture.controller())) {
+                throw new IllegalArgumentException("Verified call %s is on a mock that was not passed to inOrder(...)"
+                        .formatted(capture.matched().signature()));
+            }
             long found = capture.controller().verifyInOrder(capture.matched(), lastSequence);
             if (found < 0) {
                 throw new AssertionFailed(
