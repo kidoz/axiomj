@@ -327,7 +327,6 @@ public final class TestRunner {
                     return output;
                 }
             }
-            changed = true;
         }
         return output;
     }

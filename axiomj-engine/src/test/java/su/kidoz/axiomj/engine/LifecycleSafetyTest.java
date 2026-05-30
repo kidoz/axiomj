@@ -14,6 +14,7 @@ import su.kidoz.axiomj.api.Fact;
 class LifecycleSafetyTest {
 
     static class BeforeSuiteFails {
+        @SuppressWarnings("DoNotCallSuggester")
         @BeforeSuite
         static void setup() {
             throw new IllegalStateException("suite setup boom");
