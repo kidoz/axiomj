@@ -1,10 +1,10 @@
 # AxiomJ
 
-[![Java](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://openjdk.org/projects/jdk/21/)
+[![Java](https://img.shields.io/badge/Java-25%2B-orange.svg)](https://openjdk.org/projects/jdk/25/)
 [![Build](https://img.shields.io/badge/build-Gradle-02303A.svg?logo=gradle)](https://gradle.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-AxiomJ is a modern, **Java 21+**, MIT-licensed test framework that brings facts and
+AxiomJ is a modern, **Java 25+**, MIT-licensed test framework that brings facts and
 property-based tests, dependency injection, in-box mocking, fluent assertions,
 feature-oriented grouping, concurrent execution, and agent-friendly reports together in one
 coherent toolkit under the package root `su.kidoz.axiomj`.
@@ -30,7 +30,7 @@ coherent toolkit under the package root `su.kidoz.axiomj`.
 
 ## Requirements
 
-- Java 21+
+- Java 25+ (uses Scoped Values, unnamed variables, and pattern switches)
 - Gradle (the wrapper is included; no local install required)
 
 ## Quick start
