@@ -1,10 +1,8 @@
 package su.kidoz.axiomj.assertions;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +16,7 @@ import java.util.function.Predicate;
 public final class Expect {
     private Expect() {}
 
-    private static final ThreadLocal<Deque<List<AssertionFailed>>> SOFT = ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ScopedValue<List<AssertionFailed>> SOFT = ScopedValue.newInstance();
 
     public static <T> Subject<T> expect(T actual) {
         return new Subject<>(actual);
@@ -105,12 +103,7 @@ public final class Expect {
      */
     public static void softly(Runnable assertions) {
         var scope = new ArrayList<AssertionFailed>();
-        SOFT.get().push(scope);
-        try {
-            assertions.run();
-        } finally {
-            SOFT.get().pop();
-        }
+        ScopedValue.where(SOFT, scope).run(assertions);
         if (!scope.isEmpty()) {
             var message = new StringBuilder("Soft assertions failed (" + scope.size() + "):");
             int index = 1;
@@ -122,11 +115,11 @@ public final class Expect {
     }
 
     private static void collect(AssertionFailed failure) {
-        var stack = SOFT.get();
-        if (stack.isEmpty()) {
+        if (SOFT.isBound()) {
+            SOFT.get().add(failure);
+        } else {
             throw failure;
         }
-        stack.peek().add(failure);
     }
 
     public interface ThrowingRunnable {
@@ -134,7 +127,17 @@ public final class Expect {
     }
 
     /** Base for all subjects: carries an optional {@code as}/{@code because} description and the failure sink. */
-    public abstract static class AbstractSubject<S extends AbstractSubject<S>> {
+    public abstract static sealed class AbstractSubject<S extends AbstractSubject<S>>
+            permits Subject,
+                    IntSubject,
+                    LongSubject,
+                    DoubleSubject,
+                    BooleanSubject,
+                    StringSubject,
+                    OptionalSubject,
+                    IterableSubject,
+                    MapSubject,
+                    ThrowableSubject {
         private String description;
 
         @SuppressWarnings("unchecked")

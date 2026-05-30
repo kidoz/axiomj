@@ -75,28 +75,29 @@ final class JsonReport {
     }
 
     private static StringBuilder value(StringBuilder json, Object value) {
-        if (value == null) {
-            json.append("null");
-        } else if (value instanceof Number || value instanceof Boolean) {
-            json.append(value);
-        } else if (value instanceof Map<?, ?> map) {
-            json.append("{");
-            int i = 0;
-            for (var entry : map.entrySet()) {
-                field(json, String.valueOf(entry.getKey()), entry.getValue());
-                if (++i < map.size()) json.append(", ");
+        switch (value) {
+            case null -> json.append("null");
+            case Number number -> json.append(number);
+            case Boolean bool -> json.append(bool);
+            case Map<?, ?> map -> {
+                json.append("{");
+                int i = 0;
+                for (var entry : map.entrySet()) {
+                    field(json, String.valueOf(entry.getKey()), entry.getValue());
+                    if (++i < map.size()) json.append(", ");
+                }
+                json.append("}");
             }
-            json.append("}");
-        } else if (value instanceof Iterable<?> iterable) {
-            json.append("[");
-            int i = 0;
-            for (var element : iterable) {
-                if (i++ > 0) json.append(", ");
-                value(json, element);
+            case Iterable<?> iterable -> {
+                json.append("[");
+                int i = 0;
+                for (var element : iterable) {
+                    if (i++ > 0) json.append(", ");
+                    value(json, element);
+                }
+                json.append("]");
             }
-            json.append("]");
-        } else {
-            quote(json, String.valueOf(value));
+            default -> quote(json, String.valueOf(value));
         }
         return json;
     }

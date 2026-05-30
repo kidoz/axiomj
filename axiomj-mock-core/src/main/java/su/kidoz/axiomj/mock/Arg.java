@@ -1,6 +1,5 @@
 package su.kidoz.axiomj.mock;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
@@ -10,9 +9,9 @@ import java.util.function.Predicate;
 /**
  * Argument matchers for {@link Mocks#when} and {@link Mocks#verify}.
  *
- * <p>Each matcher call pushes an {@link ArgMatcher} onto a thread-local stack while a capture is active and returns a
- * type-correct placeholder, so it can be used inline as a method argument: {@code when(() ->
- * repo.find(Arg.any())).thenReturn(...)}.
+ * <p>Each matcher call pushes an {@link ArgMatcher} onto the capture's matcher stack (a {@link ScopedValue} bound by
+ * {@link Mocks} for the duration of a {@code when}/{@code verify} call) and returns a type-correct placeholder, so it
+ * can be used inline as a method argument: {@code when(() -> repo.find(Arg.any())).thenReturn(...)}.
  *
  * <p>Within a single mocked call you must use matchers for either all arguments or none. When any matcher is used, wrap
  * literal values with {@link #eq(Object)}.
@@ -20,23 +19,24 @@ import java.util.function.Predicate;
 public final class Arg {
     private Arg() {}
 
-    private static final ThreadLocal<Deque<ArgMatcher>> STACK = ThreadLocal.withInitial(ArrayDeque::new);
+    /** Bound by {@link Mocks} around each capture; matchers are pushed here and drained when the call is recorded. */
+    static final ScopedValue<Deque<ArgMatcher>> STACK = ScopedValue.newInstance();
 
     private static void push(ArgMatcher matcher) {
-        STACK.get().addLast(matcher);
+        if (STACK.isBound()) {
+            STACK.get().addLast(matcher);
+        }
     }
 
     /** Drains the matchers pushed during the current capture, in argument order. */
     static List<ArgMatcher> drain() {
+        if (!STACK.isBound()) {
+            return List.of();
+        }
         var stack = STACK.get();
         var drained = new ArrayList<>(stack);
         stack.clear();
         return drained;
-    }
-
-    /** Clears any matchers left over from an aborted capture. */
-    static void reset() {
-        STACK.get().clear();
     }
 
     /** Matches any value, including {@code null}. */

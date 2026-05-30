@@ -89,7 +89,7 @@ public final class SimpleContainer implements Binder {
     @Override
     public <T> Binder bindAll(Class<T> type, List<Supplier<? extends T>> providers) {
         Objects.requireNonNull(type, "type");
-        var list = multibindings.computeIfAbsent(type, ignored -> new ArrayList<>());
+        var list = multibindings.computeIfAbsent(type, _ -> new ArrayList<>());
         for (var provider : providers) {
             list.add(new Binding<>(provider, Scope.PER_TEST));
         }
@@ -247,7 +247,7 @@ public final class SimpleContainer implements Binder {
         for (int i = closeables.size() - 1; i >= 0; i--) {
             try {
                 closeables.get(i).close();
-            } catch (Exception ignored) {
+            } catch (Exception _) {
                 // best-effort cleanup
             }
         }

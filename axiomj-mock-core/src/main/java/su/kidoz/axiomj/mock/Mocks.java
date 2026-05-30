@@ -26,8 +26,8 @@ import su.kidoz.axiomj.assertions.AssertionFailed;
 public final class Mocks {
     private Mocks() {}
 
-    private static final ThreadLocal<CaptureMode> CAPTURE_MODE = new ThreadLocal<>();
-    private static final ThreadLocal<List<MockController>> SESSION = new ThreadLocal<>();
+    private static final ScopedValue<CaptureMode> CAPTURE_MODE = ScopedValue.newInstance();
+    private static final ScopedValue<List<MockController>> SESSION = ScopedValue.newInstance();
     private static final AtomicLong SEQUENCE = new AtomicLong();
     private static final Map<Object, MockController> NON_PROXY_MOCKS = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -93,23 +93,20 @@ public final class Mocks {
         return type.cast(proxy);
     }
 
-    /** Begins tracking mocks created on this thread for {@link #verifyStrictStubs()}; used by the engine per test. */
-    public static void openSession() {
-        SESSION.set(new ArrayList<>());
-    }
-
-    /** Ends the current strict-stub tracking session on this thread. */
-    public static void closeSession() {
-        SESSION.remove();
+    /**
+     * Runs {@code body} inside a strict-stub tracking scope: mocks created during it are recorded so that
+     * {@link #verifyStrictStubs()} can report unmatched strict stubs. Used by the engine to wrap each test invocation.
+     */
+    public static <T> T inSession(Supplier<T> body) {
+        return ScopedValue.where(SESSION, new ArrayList<MockController>()).call(body::get);
     }
 
     /** Fails if any strict mock created in the current session has a stub that was never matched. */
     public static void verifyStrictStubs() {
-        var session = SESSION.get();
-        if (session == null) {
+        if (!SESSION.isBound()) {
             return;
         }
-        for (var controller : session) {
+        for (var controller : SESSION.get()) {
             if (controller.strict) {
                 var unused = controller.firstUnusedStub();
                 if (unused != null) {
@@ -121,9 +118,8 @@ public final class Mocks {
     }
 
     private static void register(MockController controller) {
-        var session = SESSION.get();
-        if (session != null) {
-            session.add(controller);
+        if (SESSION.isBound()) {
+            SESSION.get().add(controller);
         }
     }
 
@@ -205,13 +201,9 @@ public final class Mocks {
 
     private static Capture capture(CaptureKind kind, Supplier<?> call) {
         var mode = new CaptureMode(kind);
-        CAPTURE_MODE.set(mode);
-        try {
-            call.get();
-        } finally {
-            CAPTURE_MODE.remove();
-            Arg.reset();
-        }
+        ScopedValue.where(CAPTURE_MODE, mode)
+                .where(Arg.STACK, new ArrayDeque<ArgMatcher>())
+                .run(call::get);
         return mode.requiredCapture();
     }
 
@@ -236,9 +228,9 @@ public final class Mocks {
 
         @SafeVarargs
         public final OngoingStubbing<T> thenReturn(T value, T... more) {
-            rule.answers.add(ignored -> value);
+            rule.answers.add(_ -> value);
             for (T extra : more) {
-                rule.answers.add(ignored -> extra);
+                rule.answers.add(_ -> extra);
             }
             return this;
         }
@@ -250,7 +242,7 @@ public final class Mocks {
 
         public OngoingStubbing<T> thenThrow(Throwable error) {
             Objects.requireNonNull(error, "error");
-            rule.answers.add(ignored -> {
+            rule.answers.add(_ -> {
                 throw error;
             });
             return this;
@@ -494,8 +486,8 @@ public final class Mocks {
                 };
             }
 
-            var mode = CAPTURE_MODE.get();
-            if (mode != null) {
+            if (CAPTURE_MODE.isBound()) {
+                var mode = CAPTURE_MODE.get();
                 var captured = Invocation.from(type, method, args);
                 mode.capture(this, new MatchedInvocation(type, method, resolveMatchers(method, args)));
                 if (deep && method.getReturnType().isInterface()) {
@@ -535,7 +527,7 @@ public final class Mocks {
         }
 
         private synchronized Object deepChild(Invocation invocation, Class<?> childType) {
-            return deepChildren.computeIfAbsent(invocation, ignored -> Mocks.mockDeep(childType));
+            return deepChildren.computeIfAbsent(invocation, _ -> Mocks.mockDeep(childType));
         }
 
         private List<ArgMatcher> resolveMatchers(Method method, Object[] args) {
