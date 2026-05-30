@@ -55,6 +55,20 @@ public final class ClassMockingTest {
         }
     }
 
+    @Fact(name = "mock construction")
+    @Scenario("Instrumentation agent intercepts constructor calls to return a mock")
+    void mockConstruction() {
+        su.kidoz.axiomj.mock.bytecode.ConstructorMocks.mockConstruction(Calculator.class);
+        try {
+            Calculator calc = new Calculator();
+            Mocks.when(() -> calc.add(Arg.anyInt(), Arg.anyInt())).thenReturn(99);
+            expect(calc.add(10, 20)).isEqualTo(99);
+            Mocks.verify(() -> calc.add(10, 20)).calledOnce();
+        } finally {
+            su.kidoz.axiomj.mock.bytecode.ConstructorMocks.unmockConstruction(Calculator.class);
+        }
+    }
+
     public static class StaticUtil {
         public static String hello(String name) {
             return "Real " + name;

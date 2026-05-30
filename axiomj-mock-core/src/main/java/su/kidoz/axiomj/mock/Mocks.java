@@ -75,13 +75,23 @@ public final class Mocks {
     }
 
     /**
-     * SPI for the bytecode module: binds a non-proxy mock instance to its engine handler so that
-     * {@link #verifyNoMoreInteractions} / {@link #verifyNoInteractions} accept class mocks too.
+     * SPI for the optional {@code axiomj-mock-bytecode} module: binds a non-proxy mock instance to its engine handler
+     * so that {@link #verifyNoMoreInteractions} / {@link #verifyNoInteractions} accept class mocks too.
      */
     public static void bindInstance(Object mock, InvocationHandler handler) {
         if (handler instanceof MockController controller) {
             NON_PROXY_MOCKS.put(mock, controller);
         }
+    }
+
+    /**
+     * SPI for the optional {@code axiomj-mock-bytecode} module: returns the handler bound to a non-proxy mock instance.
+     */
+    public static InvocationHandler getHandlerIfMock(Object mock) {
+        if (mock == null) {
+            return null;
+        }
+        return NON_PROXY_MOCKS.get(mock);
     }
 
     private static <T> T newProxy(Class<T> type, MockController controller) {
